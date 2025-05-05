@@ -1,0 +1,28 @@
+{
+  "name": "asa-autominds",
+  "version": "1.0.0",
+  "description": "ASA Agent for Autominds group",
+  "main": "AutomindsAgent.js",
+  "type": "module",
+  "scripts": {
+    "run": "node AutomindsAgent.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/strambinienea/ASA-Autominds.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/strambinienea/ASA-Autominds/issues"
+  },
+  "homepage": "https://github.com/strambinienea/ASA-Autominds#readme",
+  "dependencies": {
+    "@unitn-asa/deliveroo-js-client": "^2.0.2",
+    "@unitn-asa/pddl-client": "^0.0.37",
+    "dotenv": "^16.5.0",
+    "node-fetch": "^3.3.0",
+    "socket.io-client": "^4.6.0"
+  }
+}

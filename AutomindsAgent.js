@@ -41,18 +41,33 @@ client.onParcelsSensing(async (pp) => {
     }
 })
 
-// Fetch position of the drop points
+// Fetch position of the drop points and all walkable tiles
 const depots = new Map();
+const walkableTiles = new Map();
 client.onMap((width, height, tiles) => {
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             const tile = tiles[y * width + x];
-            // Check if tile exists and has a type property that equals 2 (delivery)
-            if (tile && typeof tile.type === 'number' && tile.type === 2) {
-                depots.set(`${x},${y}`, {x, y});
+
+            if (tile && typeof tile.type === 'number') {
+
+                switch (tile.type) {
+                    case 1: // walkable
+                        walkableTiles.set(`${x},${y}`, {x, y});
+                        break;
+                    case 2: // depot - tiles are also walkable
+                        walkableTiles.set(`${x},${y}`, {x, y});
+                        depots.set(`${x},${y}`, {x, y});
+                        break;
+                    default:
+                        break
+                }
             }
         }
     }
+
+    console.log("Depots: ", depots);
+    console.log("Walkable tiles: ", walkableTiles);
 });
 
 
@@ -167,24 +182,8 @@ class IntentionRevision {
      */
     async push(predicate) {
 
-        // OLD PUSH
-        // // Check if already queued
-        // const last = this.intention_queue.at(-1);
-        // if (last && last.predicate.join(' ') === predicate.join(' ')) {
-        //     return;
-        // }
-        //
-        // console.log('Add new predicate: [', predicate, '] to intention queue');
-        // const intention = new Intention(this, predicate);
-        // this.intention_queue.push(intention);
-        //
-        // // Force current intention stop
-        // if (last) {
-        //     last.stop();
-        // }
-
         // Check if the same intention is already queued
-        if (this.intention_queue.find( i => i.predicate.join(' ') === predicate.join(' '))) {
+        if (this.intention_queue.find(i => i.predicate.join(' ') === predicate.join(' '))) {
             console.log("Intention [", predicate, "] is already in the queue, skipping it");
             return;
         }
@@ -381,9 +380,71 @@ class BlindMove extends Plan {
     }
 }
 
+// Takes in consideration which tiles are walkable, should avoid penalties
+// TODO Can also add collision avoidance against other agents
+class SemiBlindMove extends Plan {
+
+    static isApplicableTo(command) {
+        return command === 'go_to';
+    }
+
+    async execute(command, x, y) {
+
+        while (me.x !== x || me.y !== y) {
+
+            if (this.stopped) {
+                throw ['stopped'];
+            }
+
+            let moved_horizontally;
+            let moved_vertically;
+
+            if (x > me.x && isWalkable(me.x + 1, me.y)) {
+                console.log('moving right')
+                moved_horizontally = await client.emitMove('right')
+            } else if (x < me.x && isWalkable(me.x - 1, me.y)) {
+                console.log('moving left')
+
+                moved_horizontally = await client.emitMove('left')
+            }
+
+            if (moved_horizontally) {
+                me.x = moved_horizontally.x;
+                me.y = moved_horizontally.y;
+            }
+
+            if (this.stopped) {
+                throw ['stopped'];
+            }
+
+            if (y > me.y && isWalkable(me.x, me.y + 1)) {
+                console.log('moving up')
+
+                moved_vertically = await client.emitMove('up')
+            } else if (y < me.y && isWalkable(me.x, me.y - 1)) {
+                console.log('moving down')
+
+                moved_vertically = await client.emitMove('down')
+            }
+
+            if (moved_vertically) {
+                me.x = moved_vertically.x;
+                me.y = moved_vertically.y;
+            }
+
+            if (!moved_horizontally && !moved_vertically) {
+                throw 'stucked';
+            }
+        }
+
+        return true;
+    }
+}
+
 planLibrary.push(GoPickUp)
 planLibrary.push(GoDropOff)
-planLibrary.push(BlindMove)
+// planLibrary.push(BlindMove)
+planLibrary.push(SemiBlindMove)
 
 /**
  * Options generation and filtering function
@@ -392,45 +453,57 @@ function optionsGeneration() {
 
     const options = [];
 
-    // 1. Check if I'm carrying a parcel (DELIVERY PRIORITY)
+    // If carrying a parcel, add drop_off to options
     const carryingParcel = Array.from(parcels.values()).find(p => p.carriedBy === me.id);
     if (carryingParcel) {
-        for (const d of depots.values()) {
-            options.push(['go_drop_off', d.x, d.y]);
-        }
-    }
+        // Find the nearest depot to drop off the parcel
+        let minDist = Infinity;
+        let bestDepot = null;
 
-    // 2. If not carrying, look for parcels to pick up
-    else {
-        for (const p of parcels.values()) {
-            if (!p.carriedBy) {
-                options.push(['go_pick_up', p.x, p.y, p.id]);
+        for (const d of depots.values()) {
+            const dist = distance(me, d);
+            if (dist < minDist) {
+                minDist = dist;
+                bestDepot = d;
             }
         }
+
+        options.push(['go_drop_off', bestDepot.x, bestDepot.y]);
     }
 
-    // 3. If no valid options, do a random move (LAST RESORT)
+    // Check if there are any parcels to pick up
+    for (const p of parcels.values()) {
+        if (!p.carriedBy) {
+            options.push(['go_pick_up', p.x, p.y, p.id]);
+        }
+    }
+
+    // If no options are available, then add a random move to the option, picking from the walkable tiles map
     if (options.length === 0) {
-        const x = Math.floor(Math.random() * 10); // Adjust based on map size
-        const y = Math.floor(Math.random() * 10);
+        const walkableTilesArray = Array.from(walkableTiles.values());
+        const randomIndex = Math.floor(Math.random() * walkableTilesArray.length);
+        const {x, y} = walkableTilesArray[randomIndex];
+
         options.push(['go_to', x, y]);
     }
 
     // 4. Select the nearest option
     let bestOption = null;
     let minDistance = Infinity;
-    for (const option of options) {
-        const [_, x, y] = option;
-        const d = distance(me, {x, y});
 
-        if (_ === 'go_drop_off') {
+    console.log("Options: ", options);
+    for (const option of options) {
+        const [command, x, y] = option;
+        const dist = distance(me, {x, y});
+
+        // Give priority to drop_off
+        // TODO Could be improved by checking if any parcel are along the drop_off path
+        if (command === 'go_drop_off') {
             bestOption = option;
             break;
-        }
-
-        if (d < minDistance) {
-            minDistance = d;
+        } else if (dist < minDistance) {
             bestOption = option;
+            minDistance = dist;
         }
     }
 
@@ -450,3 +523,6 @@ function distance({x: x1, y: y1}, {x: x2, y: y2}) {
     return dx + dy;
 }
 
+function isWalkable(x, y) {
+    return walkableTiles.has(`${x},${y}`);
+}

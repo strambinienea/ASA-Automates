@@ -77,15 +77,17 @@ class Logger {
     static #send(level, ...args) {
         if ( cluster.isWorker ) {
             const agentName = process.env.IS_LEADER === 'true' ? config.AGENT_NAME : config.AGENT2_NAME;
+            const threadContext = Logger.getThreadContext();
             process.send({
                 type: 'log',
                 agentName,
                 level,
+                threadContext,
                 data: Logger.#serializeArgs(...args)
             });
         } else {
             if ( CURRENT_LOG_LEVEL >= LOG_LEVELS[level.toUpperCase()] ) {
-                console[level](`[${level.toUpperCase()}][${Logger.getThreadContext()}]`, Logger.#serializeArgs(...args));
+                console[level](Logger.#serializeArgs(...args));
             }
         }
     }

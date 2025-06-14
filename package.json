@@ -5,7 +5,7 @@
   "main": "AutomindsAgent.js",
   "type": "module",
   "scripts": {
-    "run": "node AutomindsAgent.js",
+    "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -22,6 +22,7 @@
     "@unitn-asa/deliveroo-js-client": "^2.0.2",
     "@unitn-asa/pddl-client": "^0.0.37",
     "dotenv": "^16.5.0",
+    "jsonwebtoken": "^9.0.2",
     "node-fetch": "^3.3.0",
     "socket.io-client": "^4.6.0"
   }

@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import {decodeToken} from "./utils/util.js";
+import {decodeToken} from "./utils/utils.js";
 import GoTo from "./planner/plans/go-to.js";
 import GoPickUp from "./planner/plans/go-pick-up.js";
 import GoDropOff from "./planner/plans/go-drop-off.js";

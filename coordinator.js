@@ -4,6 +4,9 @@ import config from "./config.js";
 import dotenv from 'dotenv';
 import Logger from "./utils/logger.js";
 
+/** @type { Agent } */
+let agent = null;
+
 class Coordinator {
 
     // Host of the Deliveroo Client
@@ -13,7 +16,7 @@ class Coordinator {
         this.#host = host;
     }
 
-    startAgents() {
+    async startAgents() {
 
         if ( cluster.isPrimary ) {
 
@@ -39,32 +42,30 @@ class Coordinator {
             dotenv.config();
             if ( process.env.IS_LEADER === 'true' ) {   // Spawn Leader
 
-                // TODO MANAGE PLAN LIBRARY
-                const leader = new Agent(
+                agent = new Agent(
                     config.AGENT_ID,
                     this.#host,
                     config.TOKEN,
                     true,
-                    config.DUAL_AGENT ? config.AGENT2_ID : null,
-                    []
+                    config.DUAL_AGENT ? config.AGENT2_ID : null
                 );
-                leader.loop();
+                agent.loop();
+
+                await agent.push(['go_to', 1, 1]);
 
             } else if ( config.DUAL_AGENT ) {           // Spawn Follower - Only in Dual-Agent mode
 
-                // TODO MANAGE PLAN LIBRARY
-                const follower = new Agent(
+                agent = new Agent(
                     config.AGENT2_ID,
                     this.#host,
                     config.TOKEN_2,
                     false,
-                    config.AGENT_ID,
-                    []
+                    config.AGENT_ID
                 )
-                follower.loop();
+                agent.loop();
             }
         }
     }
 }
 
-export default Coordinator;
+export {Coordinator, agent};

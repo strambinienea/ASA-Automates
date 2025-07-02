@@ -3,7 +3,6 @@ import Tile from "./map-entities/tile.js";
 import TileType from "./map-entities/tile-type.js";
 import Parcel from "./map-entities/parcel.js";
 import AdversaryAgent from "./map-entities/adversary-agent.js";
-import {DeliverooApi} from "@unitn-asa/deliveroo-js-client";
 import Logger from "../utils/logger.js";
 import config from "../config.js";
 
@@ -24,6 +23,28 @@ class WorldState {
 
     constructor() {
         this.#worldMap = new WorldMap();
+    }
+
+    get worldMap() {
+        return this.#worldMap;
+    }
+
+    get PARCEL_DECADING_INTERVAL() {
+        return this.#PARCEL_DECADING_INTERVAL;
+    }
+
+    get PARCELS_OBSERVATION_DISTANCE() {
+        return this.#PARCELS_OBSERVATION_DISTANCE;
+    }
+
+    // <== GETTERS & SETTERS ==>
+
+    get PARCEL_REWARD_AVG() {
+        return this.#PARCEL_REWARD_AVG;
+    }
+
+    get PARCEL_REWARD_VARIANCE() {
+        return this.#PARCEL_REWARD_VARIANCE;
     }
 
     /**
@@ -62,11 +83,10 @@ class WorldState {
             let spawnTiles = [];
 
             for ( let y = 0; y < height; y++ ) {
-                tiles[y] = []; // Initialize the row array
                 for ( let x = 0; x < width; x++ ) {
                     const tile = new Tile()
-                        .setX(x)
-                        .setY(y);
+                        .setX(y)
+                        .setY(x);
 
                     switch ( rawTiles[y * width + x].type ) {
                         case 0: {
@@ -92,7 +112,7 @@ class WorldState {
                         }
                     }
 
-                    tiles[y][x] = tile;
+                    tiles[y * width + x] = tile;
                 }
             }
 
@@ -102,20 +122,28 @@ class WorldState {
                 .setMap(tiles)
                 .setSpawnTiles(spawnTiles)
                 .setDepotTiles(deoptTiles);
+
         });
 
         // Update map with parcels information
-        client.onParcelsSensing((perceivedParcels) => instance.#onParcelsSensed(perceivedParcels));
+        // client.onParcelsSensing((perceivedParcels) => instance.#onParcelsSensed(perceivedParcels));
 
         // Use follower to spot other parcels
-        if ( followerClient ) {
-            followerClient
-                .onParcelsSensing((perceivedParcels) => instance.#onParcelsSensed(perceivedParcels));
-        }
+        // if ( followerClient ) {
+        //     followerClient
+        //         .onParcelsSensing((perceivedParcels) => instance.#onParcelsSensed(perceivedParcels));
+        // }
 
         // Update map with other agents information
         client.onAgentsSensing((agents) => instance.#onAgentsSensed(agents));
 
+    }
+
+    static getInstance() {
+        if ( !WorldState.#instance ) {
+            WorldState.#instance = new WorldState();
+        }
+        return WorldState.#instance;
     }
 
     /**
@@ -184,35 +212,6 @@ class WorldState {
 
         this.#worldMap.updateAdversaryAgents(agents);
         Logger.debug('New agents populated');
-    }
-
-    // <== GETTERS & SETTERS ==>
-
-    get worldMap() {
-        return this.#worldMap;
-    }
-
-    get PARCEL_DECADING_INTERVAL() {
-        return this.#PARCEL_DECADING_INTERVAL;
-    }
-
-    get PARCELS_OBSERVATION_DISTANCE() {
-        return this.#PARCELS_OBSERVATION_DISTANCE;
-    }
-
-    get PARCEL_REWARD_AVG() {
-        return this.#PARCEL_REWARD_AVG;
-    }
-
-    get PARCEL_REWARD_VARIANCE() {
-        return this.#PARCEL_REWARD_VARIANCE;
-    }
-
-    static getInstance() {
-        if ( !WorldState.#instance ) {
-            WorldState.#instance = new WorldState();
-        }
-        return WorldState.#instance;
     }
 }
 

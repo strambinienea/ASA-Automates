@@ -1,6 +1,8 @@
 import dotenv from 'dotenv';
 import {decodeToken} from "./utils/util.js";
-import Logger from "./utils/logger.js";
+import GoTo from "./planner/plans/go-to.js";
+import GoPickUp from "./planner/plans/go-pick-up.js";
+import GoDropOff from "./planner/plans/go-drop-off.js";
 
 /**
  * Config class, gathering information from ENV variables
@@ -15,11 +17,11 @@ class Config {
             throw new Error('HOST not defined');
         })();
 
-        /** @type string */
-        this.PROCESS_PATH = process.env.PROCESS_PATH || './agent/agent.js';
-
         /** @type boolean */
         this.DUAL_AGENT = process.env.DUAL_AGENT === 'true';
+
+        /** @type [Plan] */
+        this.PLAN_LIBRARY = [GoTo, GoPickUp, GoDropOff];
 
         // <+++ LEADER +++>
         /** @type string */
@@ -56,7 +58,7 @@ class Config {
 }
 
 let config = new Config();
+await config.init();
 
 export default config;
 
-config.init();

@@ -1,7 +1,6 @@
 import Intention from "./intention.js";
 import Logger from "../utils/logger.js";
 import {DeliverooApi} from "@unitn-asa/deliveroo-js-client";
-import logger from "../utils/logger.js";
 import WorldState from "../belief/world-state.js";
 
 class Agent {
@@ -12,8 +11,8 @@ class Agent {
      */
     #agentId;
 
-    #x;
-    #y;
+    #x = -1;
+    #y = -1;
 
     /**
      * Deliveroo Client
@@ -34,25 +33,17 @@ class Agent {
      */
     #companionId;
 
-    // TODO Type to Plan class
-    /**
-     * Library of plans used to solve achieve the intention
-     * @type { [any] }
-     */
-    #planLibrary;
-
     /**
      * @type { [Intention] }
      */
     #intentionQueue;
 
 
-    constructor(agentId, host, token, isLeader, companionId, planLibrary) {
+    constructor(agentId, host, token, isLeader, companionId) {
         this.#agentId = agentId;
         this.#client = new DeliverooApi(host, token);
         this.#isLeader = isLeader;
         this.#companionId = companionId;
-        this.#planLibrary = planLibrary;
         this.#intentionQueue = [];
 
         this.#client.onYou(({_id, _name, x, y, _score}) => {
@@ -65,7 +56,13 @@ class Agent {
         this.#client.onConnect(() => Logger.info('Connected to Deliveroo client'));
         this.#client.onDisconnect(() => Logger.info('Disconnected from Deliveroo client'));
 
+        // Setup listeners to gather map information
         WorldState.observerWorldState(this.#client);
+
+    }
+
+    get agentId() {
+        return this.#agentId;
     }
 
     get intentionQueue() {
@@ -83,33 +80,18 @@ class Agent {
         this.#isLeader = isLeader;
     }
 
-    get planLibrary() {
-        return this.#planLibrary;
-    }
-
-    set planLibrary(planLibrary) {
-        this.#planLibrary = planLibrary;
-    }
-
-    // <== GETTERS & SETTERS ==>
-
-    get agentId() {
-        return this.#agentId;
-    }
-
     /**
      *
      * @returns {Promise<void>}
      */
     async loop() {
+
         while ( true ) {
 
             // Consume intention in intentionQueue, else wait for a new one
             if ( this.#intentionQueue.length > 0 ) {
-
                 // Fetch current intention and action
                 const intention = this.#intentionQueue[0];
-                Logger.debug('Current intention: ', intention);
 
                 // Start achieving current intention
                 const response = await intention.achieve().catch(error => {
@@ -120,6 +102,17 @@ class Agent {
                     Logger.debug('Intention already started');
                 } else if ( response ) {
                     // TODO Do something if plan is successfully completed?
+                    Logger.info('Intention successfully completed');
+                    // if ( intention.predicate[0] === 'go_to' ) {
+                    //
+                    //     function getRandomInt(min, max) {
+                    //         min = Math.ceil(min);   // Round up to the nearest integer
+                    //         max = Math.floor(max);  // Round down to the nearest integer
+                    //         return Math.floor(Math.random() * (max - min + 1)) + min;
+                    //     }
+                    //
+                    //     await this.push(['go_to', getRandomInt(0, 10), getRandomInt(0, 10)]);
+                    // }
                 }
 
                 // Remove intention from intentionQueue and continue
@@ -130,6 +123,8 @@ class Agent {
         }
     }
 
+    // <== GETTERS & SETTERS ==>
+
     /**
      * Push a new intention into the intentionQueue
      * @param { [string] } predicate - New intention to push into intentionQueue
@@ -137,26 +132,31 @@ class Agent {
      */
     async push(predicate) {
 
+        Logger.info('Pushing new intention into intention queue: ', predicate);
+
         // Check if intention is already in the queue
         if ( this.#intentionQueue.find(i => i.predicate.join(' ') === predicate.join(' ')) ) {
-            Logger.debug("Intention [", predicate, "] is already in the queue, skipping it");
+            Logger.warn("Intention [", predicate, "] is already in the queue, skipping it");
             return null;
         }
 
-        const intention = new Intention(this, predicate, this.#planLibrary);
+        const intention = new Intention(this, predicate, this.#client);
+
         this.#intentionQueue.push(intention);
 
         // Sort the queue with the new intention
         this.sortIntentionQueue();
 
+        // TODO Check and fix
         // If leader agent, then communicate to follower what parcels to ignore,
         // since they are already in this intentionQueue.
         // Do this in the push, since it's when the intentionQueue is updated with new information
-        if ( await this.#sendParcelsToIgnore() === null ) {
-            Logger.error('Failed to send parcels to ignore to follower agent');
-        }
+        // if ( await this.#sendParcelsToIgnore() === null ) {
+        //     Logger.error('Failed to send parcels to ignore to follower agent');
+        // }
 
-        Logger.debug('New intention pushed into intention queue: ', intention);
+        Logger.debug('New intention pushed into intention queue: ', intention.predicate);
+
         return intention;
     }
 
@@ -166,6 +166,7 @@ class Agent {
      */
     sortIntentionQueue() {
 
+        // TODO Implement
         // Sort pickups by distance (closest first)
         const pickUpIntentions = this.#intentionQueue
             .filter(i => i.predicate[0] === 'go_pick_up')
@@ -181,7 +182,7 @@ class Agent {
         //     // const distB = aStarDistance([me.x, me.y], [bx, by]);
         //
         //     return distA - distB; // Closest first
-        // });
+        // });s
 
         // TODO Consider ordering dropOff based on distance to
         const dropOffIntentions = this.#intentionQueue.filter(i => i.predicate[0] === 'go_drop_off');
@@ -189,11 +190,13 @@ class Agent {
 
         // Rebuild the intention queue, priority is given to pickups (ordered by distance),
         // then drop off and last is move (only consider one each of these last two)
-        this.#intentionQueue = [
-            ...pickUpIntentions,
-            dropOffIntentions.length > 0 ? dropOffIntentions[0] : [],
-            goToIntentions.length > 0 ? goToIntentions[0] : []
-        ];
+        this.#intentionQueue = [...pickUpIntentions];
+        if ( dropOffIntentions.length > 0 ) {
+            this.#intentionQueue.push(dropOffIntentions[0]);
+        }
+        if ( goToIntentions.length > 0 ) {
+            this.#intentionQueue.push(goToIntentions[0]);
+        }
     }
 
     /**
@@ -211,7 +214,10 @@ class Agent {
     async #sendParcelsToIgnore() {
 
         if ( this.#isLeader ) {
-            console.debug('Agent: ' + ' sending message with parcels to ignore to follower agent - Follower ID: ', this.#companionId);
+            Logger.info(
+                'Agent: ', this.agentId, ' sending message with parcels to ignore to follower agent - ' +
+                'Follower ID: ', this.#companionId
+            );
 
             const parcels = []
             this.#intentionQueue.forEach(intention => {
@@ -229,14 +235,24 @@ class Agent {
             //     }
             // );
         } else {
-            console.debug('Follower agent, will not be sending messages');
+            Logger.warn('Follower agent, will not be sending messages');
             return null;
         }
     }
 
-    // TODO Type to Plan class
-    addPlanToLibrary(plan) {
-        this.#planLibrary.push(plan);
+    /**
+     * Return an object with the x and y coordinate of the agent.
+     * Is an async function to await for the fetching of data while initializing agent, should only wait at startup
+     * @return {Promise<{x: number, y: number}>}
+     */
+    async getCurrentPosition() {
+
+        // Wait for position to be fetched from Deliveroo APIs
+        while ( this.#x < 0 || this.#y < 0 ) {
+            await new Promise(res => setImmediate(res));
+        }
+
+        return {x: this.#x, y: this.#y};
     }
 }
 

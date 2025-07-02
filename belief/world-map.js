@@ -47,6 +47,17 @@ class WorldMap {
         this.#beliefSet = new Beliefset();
     }
 
+    get width() {
+        return this.#width;
+    }
+
+    get height() {
+        return this.#height;
+    }
+
+    get map() {
+        return this.#map;
+    }
 
     /**
      * Update a single tile in the map
@@ -55,13 +66,15 @@ class WorldMap {
     updateTile(tile) {
 
         if ( tile.isValidTile(this.#width, this.#height) ) {
-            this.#map[tile.y][tile.x] = tile;
+            this.#map[tile.y * this.#width + tile.x] = tile;
         } else {
             Logger.error(
                 'Tile is not valid, probably outside the map boundaries. Tile: ', tile,
                 'Map width: ', this.#width, 'Map height: ', this.#height);
         }
     }
+
+    // <== GETTERS & SETTERS ==>
 
     /**
      * Update parcels spotted by the agent, add new perceived parcels and remove expired one
@@ -166,8 +179,6 @@ class WorldMap {
         throw new Error('Not implemented');
     }
 
-    // <== GETTERS & SETTERS ==>
-
     setWidth(width) {
         this.#width = width;
         return this;
@@ -212,6 +223,66 @@ class WorldMap {
     setFollowerPosition(x, y) {
         this.#followerPosition = {x, y};
         return this;
+    }
+
+    /**
+     * Get walkable tiles from the map
+     * @param {boolean} withAgents - If true than agents will not be considered as obstacles. Default `false`
+     * @return { Promise<[Tile]> } Walkable tiles
+     */
+    async getWalkableTiles(withAgents = false) {
+
+        // Wait for the map to be populated
+        while ( this.#map.length === 0 ) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        let walkableTiles = this.#map
+            .filter(t => {
+                return t.type === TileType.DEPOT || t.type === TileType.SPAWN || t.type === TileType.OTHER
+            });
+
+        // Filter tiles where agents have been spotted, also filter follower tile
+        if ( !withAgents ) {
+            walkableTiles = walkableTiles
+                .filter(t => !this.#adversaryAgents.some(agent => agent.y === t.y && agent.x === t.x))
+                .filter(t => {
+                    if ( this.#followerPosition ) {
+                        return !(t.x === this.#followerPosition.x && t.y === this.#followerPosition.y);
+                    }
+                    return true;
+                });
+        }
+
+        return walkableTiles;
+    }
+
+    /**
+     * Return neighboring tiles for a given tile position
+     * @param { {x: number, y: number} } tile - The tile coordinate
+     * @param {boolean} walkable - If true, then only walkable neighboring tiles will be considered. Default `true`
+     */
+    async getNeighborTiles(tile, walkable = true) {
+
+        let neighbors = [
+            {x: tile.x - 1, y: tile.y},
+            {x: tile.x + 1, y: tile.y},
+            {x: tile.x, y: tile.y - 1},
+            {x: tile.x, y: tile.y + 1}
+        ]
+
+        // Check if neighbors coordinate are inside map border
+        neighbors = neighbors.filter(t => t.x >= 0 && t.x < this.#width && t.y >= 0 && t.y < this.#height)
+
+        // If walkable then filter the neighbors by checking if they are walkable tiles,
+        // also considers tiles with other agents as non-walkable tiles.
+        if ( walkable ) {
+            const walkableTiles = await this.getWalkableTiles()
+            neighbors = neighbors.filter(t => walkableTiles.some(wt => wt.x === t.x && wt.y === t.y)
+            )
+        }
+
+        return neighbors;
     }
 }
 

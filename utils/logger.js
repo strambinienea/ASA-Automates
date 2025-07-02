@@ -33,7 +33,7 @@ class Logger {
     static #serializeArgs(...args) {
 
         // Used to set the maximum number of nested objects the logger will display
-        const MAX_DEPTH = 5;
+        const MAX_DEPTH = 100;
         let depth = 0;
         // Used to avoid circular dependency in logged objects
         const seen = new WeakSet();

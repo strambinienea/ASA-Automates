@@ -1,4 +1,6 @@
 import Logger from "../utils/logger.js";
+import config from "../config.js";
+import {agent} from "../coordinator.js";
 
 /**
  * Intention
@@ -15,28 +17,29 @@ class Intention {
     // Parent refers to caller
     #parent;
 
-    // TODO Type to Plan class
     /**
-     * Library of plans used to solve achieve the intention
-     * @type { [any] }
+     * Client will be passed to the plans, to emit signals
+     * @type { DeliverooApi }
      */
-    #planLibrary;
+    #client
 
     /**
-     * @type { any[] } predicate is in the form ['go_to', x, y]
+     * @type { [string] } predicate is in the form ['go_to', x, y]
      */
     #predicate;
 
 
-    constructor(parent, predicate, planLibrary) {
+    constructor(parent, predicate, client) {
+
         this.#parent = parent;
         this.#predicate = predicate;
-        this.#planLibrary = planLibrary;
+        this.#client = client;
     }
 
     get stopped() {
         return this.#stopped;
     }
+
 
     // <== GETTERS & SETTERS ==>
 
@@ -45,14 +48,6 @@ class Intention {
      */
     get predicate() {
         return this.#predicate;
-    }
-
-    get planLibrary() {
-        return this.#planLibrary;
-    }
-
-    set planLibrary(planLibrary) {
-        this.#planLibrary = planLibrary;
     }
 
     /**
@@ -69,27 +64,28 @@ class Intention {
         }
 
         // Trying all plans in the library
-        for ( const planClass of this.#planLibrary ) {
+        for ( const planClass of config.PLAN_LIBRARY ) {
 
             if ( this.stopped ) throw ['stopped intention', ...this.predicate];
 
-            // If the plan is 'statically' applicable, then it's instantiated, executed, and the result is returned
-            if ( planClass.isApplicableTo(...this.predicate) ) {
-                this.#current_plan = new planClass(this.#parent);
-                Logger.debug('Achieving intention ', ...this.predicate, ' with plan ', planClass.name);
+            const predicate = planClass.parsePredicate(this.predicate);
+            if ( planClass.isApplicableTo(predicate) ) {
+                this.#current_plan = new planClass(this.#parent, this.#client);
+                Logger.info('Achieving intention ', predicate, ' with plan ', planClass.name);
 
                 try {
-                    const plan_res = await this.#current_plan.execute(...this.predicate);
+                    const plan_res = await this.#current_plan.execute(predicate);
 
                     Logger.debug(
-                        'Intention ', ...this.predicate,
+                        'Intention ', predicate,
                         ' successfully completed using plan ', planClass.name,
                         ' with result: ', plan_res
                     );
+                    
                     return plan_res
                 } catch (error) {
                     Logger.error(
-                        'Intention ', ...this.predicate,
+                        'Intention ', predicate,
                         ' failed, using plan ', planClass.name,
                         ' with error: ', error
                     )

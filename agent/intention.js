@@ -1,6 +1,5 @@
 import Logger from "../utils/logger.js";
 import config from "../config.js";
-import {agent} from "../coordinator.js";
 
 /**
  * Intention
@@ -81,7 +80,7 @@ class Intention {
                         ' successfully completed using plan ', planClass.name,
                         ' with result: ', plan_res
                     );
-                    
+
                     return plan_res
                 } catch (error) {
                     Logger.error(

@@ -2,6 +2,9 @@ import Intention from "./intention.js";
 import Logger from "../utils/logger.js";
 import {DeliverooApi} from "@unitn-asa/deliveroo-js-client";
 import WorldState from "../belief/world-state.js";
+import generateOptions from "../planner/options-generation.js";
+import Config from "../config.js";
+import worldState from "../belief/world-state.js";
 
 class Agent {
 
@@ -19,6 +22,11 @@ class Agent {
      * @type { DeliverooApi }
      */
     #client;
+
+    /** @type { boolean } */
+    #carryingParcel = false;
+
+    #carriedParcel = 0;
 
     /**
      * Flag that identifies if an agent is the leader or follower agent
@@ -56,28 +64,21 @@ class Agent {
         this.#client.onConnect(() => Logger.info('Connected to Deliveroo client'));
         this.#client.onDisconnect(() => Logger.info('Disconnected from Deliveroo client'));
 
+        // Sense if is carrying a parcel
+        this.#client.onParcelsSensing((parcels) => {
+            this.#carryingParcel = parcels.some(parcel => parcel.carriedBy === this.agentId)
+        })
+
         // Setup listeners to gather map information
         WorldState.observerWorldState(this.#client);
 
-    }
+        // Setup option generation when receiving a sense event
+        // this.#client.onYou(generateOptions);
+        this.#client.onParcelsSensing(generateOptions);
+        this.#client.onAgentsSensing(generateOptions);
 
-    get agentId() {
-        return this.#agentId;
-    }
-
-    get intentionQueue() {
-        return this.#intentionQueue;
-    }
-
-    get isLeader() {
-        return this.#isLeader;
-    }
-
-    /**
-     * @param {boolean} isLeader
-     */
-    set isLeader(isLeader) {
-        this.#isLeader = isLeader;
+        // Also setup generation at fixed intervals, in case the agent get stuck
+        setInterval(generateOptions, Config.OPTION_GENERATION_INTERVAL);
     }
 
     /**
@@ -122,8 +123,6 @@ class Agent {
             }
         }
     }
-
-    // <== GETTERS & SETTERS ==>
 
     /**
      * Push a new intention into the intentionQueue
@@ -197,6 +196,11 @@ class Agent {
         if ( goToIntentions.length > 0 ) {
             this.#intentionQueue.push(goToIntentions[0]);
         }
+
+        // If the number of carried parcels is greater than the set threshold, then only consider drop off intentions
+        if ( this.#carriedParcel >= Config.MAX_CARRIED_PARCELS ) {
+            this.#intentionQueue = this.#intentionQueue.filter(i => i.predicate[0] === 'go_drop_off');
+        }
     }
 
     /**
@@ -240,6 +244,31 @@ class Agent {
         }
     }
 
+    // <== GETTERS & SETTERS ==>
+
+    get agentId() {
+        return this.#agentId;
+    }
+
+    get intentionQueue() {
+        return this.#intentionQueue;
+    }
+
+    get isLeader() {
+        return this.#isLeader;
+    }
+
+    get carryingParcel() {
+        return this.#carryingParcel;
+    }
+
+    /**
+     * @param {boolean} isLeader
+     */
+    set isLeader(isLeader) {
+        this.#isLeader = isLeader;
+    }
+
     /**
      * Return an object with the x and y coordinate of the agent.
      * Is an async function to await for the fetching of data while initializing agent, should only wait at startup
@@ -253,6 +282,19 @@ class Agent {
         }
 
         return {x: this.#x, y: this.#y};
+    }
+
+    pickedUpParcel(parcelId) {
+
+        // Remove the picked up parcel from the list of available parcels
+        const map = WorldState.getInstance().worldMap;
+        map.parcelPickedUp(parcelId);
+
+        this.#carriedParcel++;
+    }
+
+    dropAllParcels() {
+        this.#carriedParcel = 0;
     }
 }
 

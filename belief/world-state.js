@@ -126,7 +126,7 @@ class WorldState {
         });
 
         // Update map with parcels information
-        // client.onParcelsSensing((perceivedParcels) => instance.#onParcelsSensed(perceivedParcels));
+        client.onParcelsSensing((perceivedParcels) => instance.#onParcelsSensed(perceivedParcels));
 
         // Use follower to spot other parcels
         // if ( followerClient ) {
@@ -165,7 +165,8 @@ class WorldState {
                     .setY(p.y)
                     .setParcelId(p.id)
                     .setReward(p.reward)
-                    .setTimestamp(timestamp);
+                    .setTimestamp(timestamp)
+                    .setCarriedBy(null);
 
                 parcels.push(parcel);
             }

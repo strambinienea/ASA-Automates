@@ -24,7 +24,7 @@ class GoTo extends Plan {
      */
     static parsePredicate(predicate) {
 
-        // Validate predicate
+        // Validate predicate, the first three elements must be present; i.e., action and coordinates
         if (
             predicate.length < 3 ||
             predicate[0] === null ||
@@ -67,10 +67,8 @@ class GoTo extends Plan {
         const {action, x, y} = predicate;
         Logger.debug('Executing ', action, ' plan to coordinates: [', x, ', ', y, ']');
         const {x: startingX, y: startingY} = await agent.getCurrentPosition();
-        const map = WorldState.getInstance().worldMap;
 
         // Check if agent is currently on the target tile, or if start and destination coincide, if so return empty path
-        const {agentX, agentY} = agent.getCurrentPosition();
         if ( startingX === x && startingY === y ) {
             Logger.info('Agent is already on the target tile');
             return true;

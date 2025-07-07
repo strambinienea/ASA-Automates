@@ -12,6 +12,7 @@ class Parcel extends Tile {
     id;
     reward;
     timestamp;
+    carriedBy;
 
     constructor() {
         super();
@@ -19,6 +20,7 @@ class Parcel extends Tile {
         this.id = null;
         this.reward = null;
         this.timestamp = null;
+        this.carriedBy = null;
     }
 
     /**
@@ -51,6 +53,15 @@ class Parcel extends Tile {
     setTimestamp(timestamp) {
         this.timestamp = timestamp;
         return this;
+    }
+
+    setCarriedBy(agentId) {
+        this.carriedBy = agentId;
+        return this;
+    }
+
+    get CarriedBy() {
+        return this.carriedBy;
     }
 }
 

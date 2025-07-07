@@ -47,18 +47,6 @@ class WorldMap {
         this.#beliefSet = new Beliefset();
     }
 
-    get width() {
-        return this.#width;
-    }
-
-    get height() {
-        return this.#height;
-    }
-
-    get map() {
-        return this.#map;
-    }
-
     /**
      * Update a single tile in the map
      * @param { Tile } tile - The new tile
@@ -73,8 +61,6 @@ class WorldMap {
                 'Map width: ', this.#width, 'Map height: ', this.#height);
         }
     }
-
-    // <== GETTERS & SETTERS ==>
 
     /**
      * Update parcels spotted by the agent, add new perceived parcels and remove expired one
@@ -177,6 +163,38 @@ class WorldMap {
             })
 
         throw new Error('Not implemented');
+    }
+
+    // <== GETTERS & SETTERS ==>
+
+    get width() {
+        return this.#width;
+    }
+
+    get height() {
+        return this.#height;
+    }
+
+    get map() {
+        return this.#map;
+    }
+
+    get parcels() {
+        return this.#parcels;
+    }
+
+    /**
+     * Remove a parcel from the map, used when a parcel is picked up by an agent
+     * @param parcelId { string } - Id of the parcel to remove
+     */
+    parcelPickedUp(parcelId) {
+
+        Logger.debug('Removing parcel with id: ', parcelId, ' from the map');
+        this.#parcels = this.#parcels.filter(p => p.id !== parcelId);
+    }
+
+    get depotTiles() {
+        return this.#depotTiles;
     }
 
     setWidth(width) {

@@ -8,7 +8,7 @@ import {agent} from "../../coordinator.js";
  * @property {string} action - The action to execute
  * @property {number} x - x coordinate of the parcel
  * @property {number} y - y coordinate of the parcel
- * @property {number} id - id of the parcel to pick up
+ * @property {string} id - id of the parcel to pick up
  */
 
 /**
@@ -18,12 +18,12 @@ class GoPickUp extends Plan {
 
     /**
      * Parse the predicate in list form (e.g. ['go_to', x, y]) into the correct Plan instance class
-     * @param { [string, number, number, number] } predicate - The predicate to parse
+     * @param { [string, number, number, string] } predicate - The predicate to parse
      * @return { GoPickUpPredicate } - The parsed predicate object
      */
     static parsePredicate(predicate) {
 
-        // Validate predicate
+        // Validate predicate, the first three elements must be present; i.e., action and coordinates
         if (
             predicate.length < 3 ||
             predicate[0] === null ||
@@ -37,7 +37,7 @@ class GoPickUp extends Plan {
             action: predicate[0],
             x: predicate[1],
             y: predicate[2],
-            id: predicate[3] | null
+            id: predicate[3] != null ? predicate[3] : null
         };
     }
 
@@ -60,7 +60,7 @@ class GoPickUp extends Plan {
      *  - `_action`: The action to execute (**UNUSED**)
      *  - `x`: x coordinate of the parcel
      *  - `y`: y coordinate of the parcel
-     *  - `_id`: id of the parcel to pick up (**UNUSED**)
+     *  - `id`: id of the parcel to pick up
      * @return {Promise<boolean>} - True when the plan has been correctly executed
      */
     async execute(predicate) {
@@ -74,7 +74,7 @@ class GoPickUp extends Plan {
         }
 
         // Check if agent is already on the right tile, if so skip move
-        const {agentX, agentY} = await agent.getCurrentPosition();
+        const {x: agentX, y: agentY} = await agent.getCurrentPosition();
         if ( agentX === x && agentY === y ) {
             if ( this.stopped ) {
                 throw ['stopped'];
@@ -100,6 +100,13 @@ class GoPickUp extends Plan {
         await this._getClient().emitPickup()
         if ( this.stopped ) {
             throw ['stopped'];
+        }
+
+        // Increase the counter of carried parcels
+        if ( predicate.id != null ) {
+            agent.pickedUpParcel(predicate.id);
+        } else {
+            Logger.warn('No parcel id passed to go_pick_up plan');
         }
         return true;
     }

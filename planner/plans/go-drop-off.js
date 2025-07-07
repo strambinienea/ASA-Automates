@@ -8,7 +8,6 @@ import {agent} from "../../coordinator.js";
  * @property {string} action - The action to execute
  * @property {number} x - x coordinate of the parcel
  * @property {number} y - y coordinate of the parcel
- * @property {number} parcelId - id of the parcel to pick up
  * @property {number} depotId - id of the depot tile
  */
 
@@ -19,12 +18,12 @@ class GoDropOff extends Plan {
 
     /**
      * Parse the predicate in list form (e.g. ['go_to', x, y]) into the correct Plan instance class
-     * @param { [string, number, number, number, number] } predicate - The predicate to parse
+     * @param { [string, number, number, string] } predicate - The predicate to parse
      * @return { GoDropOffPredicate } - The parsed predicate object
      */
     static parsePredicate(predicate) {
 
-        // Validate predicate
+        // Validate predicate, the first three elements must be present; i.e., action and coordinates
         if (
             predicate.length < 3 ||
             predicate[0] === null ||
@@ -38,8 +37,7 @@ class GoDropOff extends Plan {
             action: predicate[0],
             x: predicate[1],
             y: predicate[2],
-            parcelId: predicate[3] | null,
-            depotId: predicate[4] | null
+            depotId: predicate[3] || null
         };
     }
 
@@ -49,7 +47,6 @@ class GoDropOff extends Plan {
      *  - `action`: The action to execute, must be equal to 'go_drop_off'
      *  - `_x`: y coordinate (**UNUSED**)
      *  - `_y`: y coordinate (**UNUSED**)
-     *  - `_parcelId`: id of the parcel to pickup (**UNUSED**)
      *  - `_depotId`: id of the depot tile (**UNUSED**)
      * @return {boolean} - True if this plan can resolve the intention, false otherwise
      */
@@ -63,7 +60,6 @@ class GoDropOff extends Plan {
      *  - `action`: The action to execute
      *  - `x`: y coordinate
      *  - `y`: y coordinate
-     *  - `_parcelId`: id of the parcel to pickup (**UNUSED**)
      *  - `_depotId`: id of the depot tile (**UNUSED**)
      * @return {Promise<boolean>} - True when the plan has been correctly executed
      */
@@ -78,7 +74,7 @@ class GoDropOff extends Plan {
         }
 
         // Check if agent is already on the right tile, if so skip move
-        const {agentX, agentY} = await agent.getCurrentPosition();
+        const {x: agentX, y: agentY} = await agent.getCurrentPosition();
         if ( agentX === x && agentY === y ) {
             if ( this.stopped ) {
                 throw ['stopped'];
@@ -100,6 +96,9 @@ class GoDropOff extends Plan {
         if ( this.stopped ) {
             throw ['stopped'];
         }
+
+        // Set the counter of carried parcels to
+        agent.dropAllParcels();
         return true;
     }
 }

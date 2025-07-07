@@ -23,6 +23,12 @@ class Config {
         /** @type [Plan] */
         this.PLAN_LIBRARY = [GoTo, GoPickUp, GoDropOff];
 
+        /**
+         * Fixed interval (in ms) for generating options.
+         * @type number
+         */
+        this.OPTION_GENERATION_INTERVAL = parseInt(process.env.OPTION_GENERATION_INTERVAL) || 200;
+
         // <+++ LEADER +++>
         /** @type string */
         this.TOKEN = process.env.TOKEN ?? (() => {
@@ -37,6 +43,11 @@ class Config {
         /** @type string */
         this.AGENT_NAME = decodedLeaderToken.name;
 
+        /**
+         * The maximum number of parcels that can be carried by the agent before it only considers drop-off instructions.
+         * @type number
+         * */
+        this.MAX_CARRIED_PARCELS = parseInt(process.env.MAX_CARRIED_PARCELS) || 4;
 
         // <+++ FOLLOWER +++>
 

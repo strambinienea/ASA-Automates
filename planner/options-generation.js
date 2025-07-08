@@ -52,11 +52,11 @@ async function generateOptions() {
     options.forEach(option => {
 
         // TODO Implement parcels to ignore
-        // if (option[0] === 'go_pick_up' && parcelsToIgnore.includes(option[3])) {
-        //
-        // } else {
-        agent.push(option);
-        // }
+        if ( option[0] === 'go_pick_up' && agent.parcelsToIgnore.includes(option[3]) ) {
+            Logger.debug("Ignoring option to pick up parcel: ", option[3], " as it is in the ignore list.");
+        } else {
+            agent.push(option);
+        }
     })
 
     await agent.sortIntentionQueue();

@@ -21,7 +21,8 @@ class GoPickUp extends Plan {
      * @param { [string, number, number, string] } predicate - The predicate to parse
      * @return { GoPickUpPredicate } - The parsed predicate object
      */
-    static parsePredicate(predicate) {
+    static parsePredicate(
+        predicate) {
 
         // Validate predicate, the first three elements must be present; i.e., action and coordinates
         if (

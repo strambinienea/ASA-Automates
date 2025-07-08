@@ -48,6 +48,9 @@ class Agent {
      */
     #intentionQueue;
 
+    /** @type{ [string] } */
+    #parcelsToIgnore = [];
+
 
     constructor(agentId, host, token, isLeader, companionId) {
         this.#agentId = agentId;
@@ -70,6 +73,10 @@ class Agent {
         this.#client.onParcelsSensing((parcels) => {
             this.#carryingParcel = parcels.some(parcel => parcel.carriedBy === this.agentId)
         })
+
+        // Handle reception of parcels to ignore message.
+        // Use the .bind so that the correct context is passed through the callback
+        this.#client.onMsg(this.#handleParcelsToIgnoreMessage.bind(this))
 
         // Setup listeners to gather map information
         WorldState.observerWorldState(this.#client);
@@ -148,16 +155,7 @@ class Agent {
         // Sort the queue with the new intention
         await this.sortIntentionQueue();
 
-        // TODO Check and fix
-        // If leader agent, then communicate to follower what parcels to ignore,
-        // since they are already in this intentionQueue.
-        // Do this in the push, since it's when the intentionQueue is updated with new information
-        // if ( await this.#sendParcelsToIgnore() === null ) {
-        //     Logger.error('Failed to send parcels to ignore to follower agent');
-        // }
-
         Logger.debug('New intention pushed into intention queue: ', intention.predicate);
-
         return intention;
     }
 
@@ -166,8 +164,6 @@ class Agent {
      * then drop off and move intentions (only consider one each of these last two)
      */
     async sortIntentionQueue() {
-
-        // TODO Implement
 
         // Get the agent's current position, used to find the distance to the parcels
         const agentPosition = await agent.getCurrentPosition();
@@ -188,6 +184,10 @@ class Agent {
         const pickUpIntentions = distanceMap
             .sort((a, b) => a.distance - b.distance)
             .map(i => i.intention);
+
+        // TODO Could limit the number of parcel an agent can pickup, using the Config.MAX_CARRIED_PARCELS
+        // Communicate to the other agent what parcels to ignore, since already in this queue
+        await this.#sendParcelsToIgnore(pickUpIntentions.map(i => i.predicate[3]));
 
         // TODO Consider ordering dropOff based on distance to
         const dropOffIntentions = this.#intentionQueue.filter(i => i.predicate[0] === 'go_drop_off');
@@ -218,61 +218,64 @@ class Agent {
     }
 
     /**
-     * Method used to communicate to the follower agent what parcels to ignore,
-     * since they are already present in the leader intentionQueue.
+     * Type for the message sent or received regarding parcels to ignore.
+     * @typedef ParcelsToIgnoreMessage
+     * @property {string} action - The action of the message, should be 'multi_pickup'
+     * @property {string[]} parcelIds - The list of parcel ids to ignore
      */
-    async #sendParcelsToIgnore() {
 
-        if ( this.#isLeader ) {
-            Logger.info(
-                'Agent: ', this.agentId, ' sending message with parcels to ignore to follower agent - ' +
-                'Follower ID: ', this.#companionId
-            );
 
-            const parcels = []
-            this.#intentionQueue.forEach(intention => {
+    /**
+     * Method used to communicate to the other agent what parcels to ignore,
+     * since they are already present in the current agent intentionQueue.
+     * @param { [string] } parcels - List with ids of parcels to ignore
+     */
+    async #sendParcelsToIgnore(parcels) {
 
-                if ( intention.predicate[0] === 'go_pick_up' ) {
-                    const [_action, _x, _y, id] = intention.predicate;
-                    parcels.push(id);
-                }
-            })
+        Logger.info(
+            'Agent: ', this.agentId, ' sending message with parcels to ignore to follower agent - ' +
+            'Follower ID: ', this.#companionId
+        );
 
-            // TODO Import client from coordinator and send message
-            // await client.emitSay(teamAgentId, {
-            //         action: "multi_pickup",
-            //         parcelIds: parcelIdss
-            //     }
-            // );
+        /** @type { ParcelsToIgnoreMessage } */
+        const message = {
+            action: "multi_pickup",
+            parcelIds: parcels,
+        }
+
+        // TODO Maybe only leader can send message, as was legacy code
+        await this.#client.emitSay(this.#companionId, message);
+    }
+
+    /**
+     * Handle the message received from the other agent regarding parcels to ignore.
+     * Replace the current list with the one received.
+     * @param _id
+     * @param _name
+     * @param { ParcelsToIgnoreMessage } message Message received from the other agent
+     * @return {Promise<void>}
+     */
+    async #handleParcelsToIgnoreMessage(_id, _name, message) {
+        if ( message.action === 'multi_pickup' ) {
+            this.#parcelsToIgnore = [...message.parcelIds];
         } else {
-            Logger.warn('Follower agent, will not be sending messages');
-            return null;
+            Logger.warn('Received message with unknown action: ', message.action);
         }
     }
 
     // <== GETTERS & SETTERS ==>
 
+
     get agentId() {
         return this.#agentId;
-    }
-
-    get intentionQueue() {
-        return this.#intentionQueue;
-    }
-
-    get isLeader() {
-        return this.#isLeader;
     }
 
     get carryingParcel() {
         return this.#carryingParcel;
     }
 
-    /**
-     * @param {boolean} isLeader
-     */
-    set isLeader(isLeader) {
-        this.#isLeader = isLeader;
+    get parcelsToIgnore() {
+        return this.#parcelsToIgnore;
     }
 
     /**
@@ -290,6 +293,10 @@ class Agent {
         return {x: this.#x, y: this.#y};
     }
 
+    /**
+     * Updates the agent's current parcel counter. Also remove the parcel from the world map.
+     * @param parcelId {string} - The id of the parcel that has been picked up
+     */
     pickedUpParcel(parcelId) {
 
         // Remove the picked up parcel from the list of available parcels
@@ -299,6 +306,9 @@ class Agent {
         this.#carriedParcel++;
     }
 
+    /**
+     * Clear the carried parcel counter, used when the agent drops off a parcel
+     */
     dropAllParcels() {
         this.#carriedParcel = 0;
     }

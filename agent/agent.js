@@ -76,7 +76,9 @@ class Agent {
 
         // Handle reception of parcels to ignore message.
         // Use the .bind so that the correct context is passed through the callback
-        this.#client.onMsg(this.#handleParcelsToIgnoreMessage.bind(this))
+        if ( Config.DUAL_AGENT ) {
+            this.#client.onMsg(this.#handleParcelsToIgnoreMessage.bind(this))
+        }
 
         // Setup listeners to gather map information
         WorldState.observerWorldState(this.#client);
@@ -187,7 +189,9 @@ class Agent {
 
         // TODO Could limit the number of parcel an agent can pickup, using the Config.MAX_CARRIED_PARCELS
         // Communicate to the other agent what parcels to ignore, since already in this queue
-        await this.#sendParcelsToIgnore(pickUpIntentions.map(i => i.predicate[3]));
+        if ( Config.DUAL_AGENT ) {
+            await this.#sendParcelsToIgnore(pickUpIntentions.map(i => i.predicate[3]));
+        }
 
         // TODO Consider ordering dropOff based on distance to
         const dropOffIntentions = this.#intentionQueue.filter(i => i.predicate[0] === 'go_drop_off');

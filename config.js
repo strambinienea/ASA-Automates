@@ -3,6 +3,8 @@ import {decodeToken} from "./utils/utils.js";
 import GoTo from "./planner/plans/go-to.js";
 import GoPickUp from "./planner/plans/go-pick-up.js";
 import GoDropOff from "./planner/plans/go-drop-off.js";
+import GoToPddl from "./planner/plans/go-to-pddl.js";
+import GoToPDDL from "./planner/plans/go-to-pddl.js";
 
 /**
  * Config class, gathering information from ENV variables
@@ -21,7 +23,7 @@ class Config {
         this.DUAL_AGENT = process.env.DUAL_AGENT === 'true';
 
         /** @type [Plan] */
-        this.PLAN_LIBRARY = [GoTo, GoPickUp, GoDropOff];
+        this.PLAN_LIBRARY = [GoToPDDL, GoPickUp, GoDropOff];
 
         /**
          * Fixed interval (in ms) for generating options.
@@ -34,6 +36,18 @@ class Config {
          * @type number
          * */
         this.MAX_CARRIED_PARCELS = parseInt(process.env.MAX_CARRIED_PARCELS) || 4;
+
+        /**
+         * Domain file for the pddl
+         * @type {string|string}
+         */
+        this.DOMAIN_FILE_PATH = process.env.DOMAIN_FILE_PATH || "./belief/domain.pddl"
+
+        /**
+         * Used to debug pddl
+         * @type {string|string}
+         */
+        this.PROBLEM_FILE_PATH = process.env.PROBLEM_FILE_PATH || "./belief/problem.pddl"
 
         // <+++ LEADER +++>
         /** @type string */

@@ -31,7 +31,8 @@ class Plan {
     }
 
     /**
-     * Parse the predicate in list form (e.g. ['go_to', x, y]) into the correct Plan instance class
+     * Parse the predicate in list form (e.g. ['go_to', x, y]) into the correct Plan instance class.
+     * Each predicate must have the first three common elements: action and coordinates.
      * @param { [any] } predicate - The predicate to parse
      * @return { {} } - The parsed predicate object
      */

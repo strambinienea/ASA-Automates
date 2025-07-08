@@ -126,6 +126,7 @@ class WorldMap {
      */
     updateBeliefSet() {
 
+        this.#beliefSet = new Beliefset();
         // Consider only walkable tiles
         this.#map
             .filter(t => t.type === TileType.DEPOT || t.type === TileType.SPAWN || t.type === TileType.OTHER)
@@ -161,8 +162,6 @@ class WorldMap {
                     Logger.debug('Tile [', x, ', ', y, '] is occupied, not filling belief set');
                 }
             })
-
-        throw new Error('Not implemented');
     }
 
     // <== GETTERS & SETTERS ==>
@@ -175,8 +174,8 @@ class WorldMap {
         return this.#height;
     }
 
-    get map() {
-        return this.#map;
+    get beliefSet() {
+        return this.#beliefSet;
     }
 
     get parcels() {

@@ -3,6 +3,7 @@ import WorldState from "../belief/world-state.js";
 import Logger from "./logger.js";
 import {Node} from "./node.js";
 import {Heap} from "heap-js";
+import fs from "fs";
 
 
 /**
@@ -135,6 +136,15 @@ async function findPath(
     return null;
 }
 
+function readFile(path) {
+    return new Promise((res, rej) => {
+        fs.readFile(path, 'utf8', (err, data) => {
+            if ( err ) rej(err)
+            else res(data)
+        })
+    })
+}
+
 /**
  * @typedef {Object} DecodedDeliverooJWT
  * @property {string} id
@@ -145,4 +155,4 @@ async function findPath(
  * @property {number} iat
  */
 
-export {decodeToken, findPath}
+export {decodeToken, readFile, findPath}

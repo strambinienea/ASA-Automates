@@ -35,3 +35,5 @@ coverage/
 # System files
 .DS_Store
 Thumbs.db
+
+problem.pddl

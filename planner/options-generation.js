@@ -8,7 +8,7 @@ async function generateOptions() {
     const options = []
     const map = WorldState.getInstance().worldMap;
     const {x: agentX, y: agentY} = await agent.getCurrentPosition();
-    
+
     // Check if there are available parcels to pick up, if so add option to pick them up
     map.parcels.forEach(parcel => {
         if ( !parcel.carriedBy ) {
@@ -59,7 +59,7 @@ async function generateOptions() {
         // }
     })
 
-    agent.sortIntentionQueue();
+    await agent.sortIntentionQueue();
 }
 
 export default generateOptions;

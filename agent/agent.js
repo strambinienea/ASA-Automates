@@ -5,6 +5,8 @@ import WorldState from "../belief/world-state.js";
 import generateOptions from "../planner/options-generation.js";
 import Config from "../config.js";
 import worldState from "../belief/world-state.js";
+import {findPath} from "../utils/utils.js";
+import {agent} from "../coordinator.js";
 
 class Agent {
 
@@ -144,7 +146,7 @@ class Agent {
         this.#intentionQueue.push(intention);
 
         // Sort the queue with the new intention
-        this.sortIntentionQueue();
+        await this.sortIntentionQueue();
 
         // TODO Check and fix
         // If leader agent, then communicate to follower what parcels to ignore,
@@ -163,25 +165,29 @@ class Agent {
      * Sort the intention queue of the agent priority is given to pickups (ordered by distance),
      * then drop off and move intentions (only consider one each of these last two)
      */
-    sortIntentionQueue() {
+    async sortIntentionQueue() {
 
         // TODO Implement
+
+        // Get the agent's current position, used to find the distance to the parcels
+        const agentPosition = await agent.getCurrentPosition();
+
         // Sort pickups by distance (closest first)
-        const pickUpIntentions = this.#intentionQueue
-            .filter(i => i.predicate[0] === 'go_pick_up')
-        // .sort((a, b) => {
-        //     // Extract coordinates from predicates
-        //     const [ax, ay] = [a.predicate[1], a.predicate[2]];
-        //     const [bx, by] = [b.predicate[1], b.predicate[2]];
-        //
-        //     // Calculate distances
-        //     // TODO ASTART IN UTILS CLASS
-        //     // TODO Use a data class instead of global variable me for position
-        //     // const distA = aStarDistance([me.x, me.y], [ax, ay]);
-        //     // const distB = aStarDistance([me.x, me.y], [bx, by]);
-        //
-        //     return distA - distB; // Closest first
-        // });s
+        // Sort array using using the findPath utility to get the distance from agent to parcel with A* algorithm
+        // Each parcel is mapped to it's distance, then sorted by distance. The map is necessary since
+        // findPath is an async function, and cannot be used directly in the sort function.
+        const distanceMap = await Promise.all(
+            this.#intentionQueue
+                .filter(i => i.predicate[0] === 'go_pick_up')
+                .map(async (intention) => {
+                    const parcel = {x: intention.predicate[1], y: intention.predicate[2]};
+                    const path = await findPath(agentPosition, parcel);
+                    return {intention, distance: path != null ? path.length : Infinity}; // Use Infinity if no path is found
+                }));
+
+        const pickUpIntentions = distanceMap
+            .sort((a, b) => a.distance - b.distance)
+            .map(i => i.intention);
 
         // TODO Consider ordering dropOff based on distance to
         const dropOffIntentions = this.#intentionQueue.filter(i => i.predicate[0] === 'go_drop_off');

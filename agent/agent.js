@@ -220,11 +220,11 @@ class Agent {
      */
     async push(predicate) {
 
-        Logger.info('Pushing new intention into intention queue: ', predicate);
+        Logger.debug('Pushing new intention into intention queue: ', predicate);
 
         // Check if intention is already in the queue
         if ( this.#intentionQueue.find(i => i.predicate.join(' ') === predicate.join(' ')) ) {
-            Logger.warn("Intention [", predicate, "] is already in the queue, skipping it");
+            Logger.debug("Intention [", predicate, "] is already in the queue, skipping it");
             return null;
         }
 
@@ -341,7 +341,7 @@ class Agent {
         if ( message.action === 'multi_pickup' ) {
             this.#parcelsToIgnore = [...message.parcelIds];
         } else {
-            Logger.warn('Received message with unknown action: ', message.action);
+            Logger.debug('Received message with unknown action: ', message.action);
         }
     }
 
@@ -389,7 +389,7 @@ class Agent {
             }
 
         } else {
-            Logger.warn('Received message with unknown action: ', message.action);
+            Logger.debug('Received message with unknown action: ', message.action);
         }
     }
 
@@ -445,7 +445,7 @@ class Agent {
                 }
             }
         } else {
-            Logger.warn('Received message with unknown action: ', message.action);
+            Logger.debug('Received message with unknown action: ', message.action);
         }
     }
 

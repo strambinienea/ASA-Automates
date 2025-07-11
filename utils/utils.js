@@ -41,8 +41,6 @@ async function findPath(
     // Check if destination is a walkable tile, if not return null
     if ( !walkableTiles.some(tile => tile.x === endPosition.x && tile.y === endPosition.y) ) {
 
-        Logger.warn('');
-
         Logger.warn('End position is not walkable');
         return null;
     }
@@ -135,7 +133,7 @@ async function findPath(
         })
     }
 
-    Logger.warn('Could not find  path between start and end position');
+    Logger.debug('Could not find path between start and end position');
     return null;
 }
 

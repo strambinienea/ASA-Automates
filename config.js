@@ -23,7 +23,8 @@ class Config {
         this.DUAL_AGENT = process.env.DUAL_AGENT === 'true';
 
         /** @type [Plan] */
-        this.PLAN_LIBRARY = [GoToPDDL, GoPickUp, GoDropOff];
+        // Add GoToPddl to the plan library if you want to use PDDL plans
+        this.PLAN_LIBRARY = [GoTo, GoPickUp, GoDropOff];
 
         /**
          * Fixed interval (in ms) for generating options.

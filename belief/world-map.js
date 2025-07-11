@@ -242,6 +242,14 @@ class WorldMap {
         return this;
     }
 
+    get followerPosition() {
+        return this.#followerPosition;
+    }
+
+    get leaderPosition() {
+        return this.#leaderPosition;
+    }
+
     /**
      * Get walkable tiles from the map
      * @param {boolean} withAgents - If true than agents will not be considered as obstacles. Default `false`
@@ -300,6 +308,32 @@ class WorldMap {
         }
 
         return neighbors;
+    }
+
+    /**
+     * Return depot tiles asynchronously. Wait until depotTiles list is populated.
+     * @return {Promise<Tile[]>} The list of depot tiles
+     */
+    async getDepotTilesAsync() {
+
+        while ( this.#depotTiles.length === 0 ) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        return this.#depotTiles;
+    }
+
+    /**
+     * Return spawn tiles asynchronously. Wait until spawnTiles list is populated.
+     * @return {Promise<Tile[]>} The list of depot tiles
+     */
+    async getSpawnTilesAsync() {
+
+        while ( this.#spawnTiles.length === 0 ) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        return this.#spawnTiles;
     }
 }
 

@@ -4,9 +4,14 @@ import {DeliverooApi} from "@unitn-asa/deliveroo-js-client";
 import WorldState from "../belief/world-state.js";
 import generateOptions from "../planner/options-generation.js";
 import Config from "../config.js";
-import worldState from "../belief/world-state.js";
 import {findPath} from "../utils/utils.js";
 import {agent} from "../coordinator.js";
+
+const Hand2HandBehaviour = {
+    NONE: 'none',               // Hand2Hand mode not active
+    DELIVER: 'deliver',       // Hand2Hand mode active, agent can deliver the parcels
+    GATHER: 'gather'            // Hand2Hand mode active, agent can gather parcels
+};
 
 class Agent {
 
@@ -35,6 +40,24 @@ class Agent {
      * @type { boolean }
      */
     #isLeader;
+
+    /**
+     * Flag that identifies if the agent is in hand2hand mode, used to change the behavior of the agent
+     * @type { Hand2HandBehaviour }
+     */
+    #hand2HandMode = Hand2HandBehaviour.NONE;
+
+    /**
+     * Tile of the reachable depot for the agent.
+     * @type { Tile }
+     */
+    #depot;
+
+    /**
+     * Tile where the GATHER agent will drop the parcels for the DELIVERY agent to collect and deposit.
+     * @type { Tile }
+     */
+    #deliveryTile = null;
 
     // TODO Handle single agent mode
     /**
@@ -78,18 +101,19 @@ class Agent {
         // Use the .bind so that the correct context is passed through the callback
         if ( Config.DUAL_AGENT ) {
             this.#client.onMsg(this.#handleParcelsToIgnoreMessage.bind(this))
+            this.#client.onMsg(this.#handleHand2HandMessage.bind(this))
         }
 
-        // Setup listeners to gather map information
-        WorldState.observerWorldState(this.#client);
-
-        // Setup option generation when receiving a sense event
+        // Setup option generation
         // this.#client.onYou(generateOptions);
         this.#client.onParcelsSensing(generateOptions);
         this.#client.onAgentsSensing(generateOptions);
 
         // Also setup generation at fixed intervals, in case the agent get stuck
         setInterval(generateOptions, Config.OPTION_GENERATION_INTERVAL);
+
+        // Setup listeners to gather map information
+        WorldState.observerWorldState(this.#client);
     }
 
     /**
@@ -100,6 +124,57 @@ class Agent {
 
         while ( true ) {
 
+            // Check if the agent is able to reach at least one depot.
+            // Keep doing this if hand2hand mode is disabled, since it takes time to discover the other agent position
+            // and find out if this agent can reach a depot or not
+            if ( this.#hand2HandMode === Hand2HandBehaviour.NONE ) {
+
+                // Set the first reachable depot, only used in hand2hand mode
+                // Set here to avoid repeating the cycle
+                const depot = await this.#checkIfCanDeliver();
+
+                const spawn = await this.#checkIfCanGather();
+
+                if ( depot ) {
+                    Logger.debug("BBBBBBB")
+                    this.#depot = depot;
+                }
+
+                if ( spawn ) {
+                    Logger.debug("CCCCCCC")
+                }
+
+
+                // If cannot deliver and dual agent mode is enabled, then send a message to the other agent.
+                // Entering hand2hand mode, so that the other agent can take care of the delivery.
+                if ( depot === null && Config.DUAL_AGENT ) { // Cannot deliver
+
+                    // Cannot deliver, enter GATHER behavior, the other agent must be DELIVER
+                    Logger.debug("BBBBBBBBBB - GATHER GATHER")
+
+                    await this.#client.emitSay(this.#companionId, {action: 'hand2hand', behavior: 'deliver'});
+                    this.#hand2HandMode = Hand2HandBehaviour.GATHER;
+                    this.#client.onMsg(this.#handleDeliveryTileMessage.bind(this));
+
+                    // Purge parcels to ignore and intention queue, since the agent is now in hand2hand mode
+                    this.#parcelsToIgnore = [];
+                    this.#intentionQueue = [];
+                } else if ( spawn === null && Config.DUAL_AGENT ) {
+
+                    // Cannot gather, enter DELIVER behavior, the other agent must be GATHER
+                    Logger.debug("CCCCCCCCCC - DELIVER DELIVER")
+
+                    await this.#client.emitSay(this.#companionId, {action: 'hand2hand', behavior: 'gather'});
+                    this.#hand2HandMode = Hand2HandBehaviour.DELIVER;
+                    this.#client.onMsg(this.#handleDeliveryTileMessage.bind(this));
+
+                    // Purge parcels to ignore and intention queue, since the agent is now in hand2hand mode
+                    this.#parcelsToIgnore = [];
+                    this.#intentionQueue = [];
+                }
+
+            }
+
             // Consume intention in intentionQueue, else wait for a new one
             if ( this.#intentionQueue.length > 0 ) {
                 // Fetch current intention and action
@@ -108,6 +183,9 @@ class Agent {
                 // Start achieving current intention
                 const response = await intention.achieve().catch(error => {
                     Logger.error('Error while achieving intention: ', intention, 'with error: ', error);
+                    this.#intentionQueue.shift();
+
+                    Logger.debug("INTENTION QUEUE: ", this.#intentionQueue);
                 });
 
                 if ( response instanceof Intention ) {
@@ -189,7 +267,7 @@ class Agent {
 
         // TODO Could limit the number of parcel an agent can pickup, using the Config.MAX_CARRIED_PARCELS
         // Communicate to the other agent what parcels to ignore, since already in this queue
-        if ( Config.DUAL_AGENT ) {
+        if ( Config.DUAL_AGENT && agent.#hand2HandMode === Hand2HandBehaviour.NONE ) {
             await this.#sendParcelsToIgnore(pickUpIntentions.map(i => i.predicate[3]));
         }
 
@@ -267,8 +345,156 @@ class Agent {
         }
     }
 
-    // <== GETTERS & SETTERS ==>
+    /**
+     * Type for the message sent or received regarding hand2hand mode.
+     * @typedef Hand2HandMessage
+     * @property {string} action - The action of the message, should be 'hand2hand'
+     * @property {string} behavior - The behavior that the recipient of the message must fulfill, can either be 'gather' or 'deliver'.
+     */
 
+    /**
+     * Handle the hand2hand message received from the other agent. Set the hand2HandMode flag to true
+     * @param _id
+     * @param _name
+     * @param { Hand2HandMessage } message Message received from the other agent
+     * @return {Promise<void>}
+     */
+    async #handleHand2HandMessage(_id, _name, message) {
+        if ( message.action === 'hand2hand' ) {
+
+            Logger.info('Agent: ', this.agentId, ' received hand2hand message');
+            // Check if hand2hand mode is active
+            if ( message.behavior === 'deliver' && await this.#checkIfCanDeliver() != null ) {
+                // Check if the agent can deliver parcels, if so set the hand2HandMode to DELIVERY
+                this.#hand2HandMode = Hand2HandBehaviour.DELIVER;
+                this.#client.onMsg(this.#handleDeliveryTileMessage.bind(this))
+
+                // Purge parcels to ignore and intention queue, since the agent is now in hand2hand mode
+                this.#parcelsToIgnore = [];
+                this.#intentionQueue = [];
+
+            } else if ( message.behavior === 'gather' && await this.#checkIfCanGather() != null ) {
+                // Check if the agent can gather parcels, if so set the hand2HandMode to GATHER
+                this.#hand2HandMode = Hand2HandBehaviour.GATHER;
+                this.#client.onMsg(this.#handleDeliveryTileMessage.bind(this))
+
+                // Purge parcels to ignore and intention queue, since the agent is now in hand2hand mode
+                this.#parcelsToIgnore = [];
+                this.#intentionQueue = [];
+            } else {
+                // If not, then it means that both agents are stuck without a reachable depot
+                throw new Error(
+                    'Agent: ' + this.agentId + ' received hand2hand message, but cannot fulfill the behavior: ' + message.behavior
+                );
+            }
+
+        } else {
+            Logger.warn('Received message with unknown action: ', message.action);
+        }
+    }
+
+    /**
+     * Type for the message sent or received regarding parcels to ignore.
+     * @typedef DeliveryTileMessage
+     * @property {string} action - The action of the message, should be 'delivery_tile'
+     * @property {status} status - The status of the message, can either be 'set' or 'error'.
+     * The first is used by the GATHER agent to set the delivery, the second is used by the GATHER agent to notify
+     * the DELIVER agent that the tile is not reachable.
+     * @property {Tile} tile - The tile chosen as the delivery tile.
+     */
+
+    /**
+     * Handle the delivery tile message received from the other agent.
+     * Either set the delivery tile if the agent is GATHER or reset it if it is DELIVER
+     * @param _id
+     * @param _name
+     * @param message { DeliveryTileMessage } - Message received from the other agent
+     * @return {Promise<void>}
+     */
+    async #handleDeliveryTileMessage(_id, _name, message) {
+        if ( message.action === 'delivery_tile' ) {
+
+            switch ( message.status ) {
+
+                case "set": {
+                    if ( this.#hand2HandMode !== Hand2HandBehaviour.GATHER ) {
+                        throw new Error(
+                            'Received delivery tile message with status set, but hand2hand mode is not GATHER'
+                        );
+                    }
+
+                    Logger.info('Received delivery tile message with status set');
+                    this.deliveryTile = message.tile;
+
+                    break
+                }
+                case "error": {
+                    if ( this.#hand2HandMode !== Hand2HandBehaviour.DELIVER ) {
+                        throw new Error(
+                            'Received delivery tile message with status error, but hand2hand mode is not DELIVER'
+                        );
+                    }
+
+                    Logger.warn('Received delivery tile message with status error');
+                    this.deliveryTile = null;
+
+                    break
+                }
+                default : {
+                    throw new Error('Received message with unknown status: ' + message.status)
+                }
+            }
+        } else {
+            Logger.warn('Received message with unknown action: ', message.action);
+        }
+    }
+
+    /**
+     * Check if the agent is able to deliver a parcel to at least one depot
+     * @return {Promise<Tile|null>} The depot tile the agent can reach, null if no depot is reachable
+     */
+    async #checkIfCanDeliver() {
+        const map = WorldState.getInstance().worldMap;
+        const depots = await map.getDepotTilesAsync();
+        const agentPosition = {x: this.#x, y: this.#y};
+
+        for ( const depot of depots ) {
+            if ( await findPath(agentPosition, {x: depot.x, y: depot.y}) != null ) {
+                return depot;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Check if the agent is able to reach at least spawn point
+     * @return {Promise<void>}
+     */
+    async #checkIfCanGather() {
+        const map = WorldState.getInstance().worldMap;
+        const spawnTiles = await map.getSpawnTilesAsync();
+        const agentPosition = {x: this.#x, y: this.#y};
+
+        for ( const spawn of spawnTiles ) {
+            if ( await findPath(agentPosition, {x: spawn.x, y: spawn.y}) != null ) {
+                return spawn;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Sends a message to the companion agent.
+     * @param message {object} - The message to send to the companion agent.
+     * @return {Promise<void>}
+     */
+    async sendMessageToCompanion(message) {
+        await this.#client.emitSay(this.#companionId, message);
+    }
+
+    // <== GETTERS & SETTERS ==>
 
     get agentId() {
         return this.#agentId;
@@ -280,6 +506,26 @@ class Agent {
 
     get parcelsToIgnore() {
         return this.#parcelsToIgnore;
+    }
+
+    get depot() {
+        return this.#depot;
+    }
+
+    get hand2HandMode() {
+        return this.#hand2HandMode;
+    }
+
+    get deliveryTile() {
+        return this.#deliveryTile;
+    }
+
+    set deliveryTile(tile) {
+        if ( tile === null || tile === undefined ) {
+            this.#deliveryTile = null;
+        } else {
+            this.#deliveryTile = tile;
+        }
     }
 
     /**
@@ -318,4 +564,4 @@ class Agent {
     }
 }
 
-export {Agent}
+export {Agent, Hand2HandBehaviour};

@@ -88,19 +88,20 @@ class WorldState {
                         .setX(y)
                         .setY(x);
 
-                    switch ( rawTiles[y * width + x].type ) {
+                    // Parse as int because the type is a string if tiles are modified by hand
+                    switch ( parseInt(rawTiles[y * width + x].type) ) {
                         case 0: {
                             tile.setType(TileType.WALL);
                             break;
                         }
                         case 1: {
                             tile.setType(TileType.SPAWN);
-                            spawnTiles.push(tile);
+                            spawnTiles.push(new Tile().setX(y).setY(x).setType(TileType.SPAWN));
                             break;
                         }
                         case 2: {
                             tile.setType(TileType.DEPOT);
-                            deoptTiles.push(tile);
+                            deoptTiles.push(new Tile().setX(y).setY(x).setType(TileType.DEPOT));
                             break;
                         }
                         case 3: {
@@ -108,7 +109,7 @@ class WorldState {
                             break;
                         }
                         default: {
-                            throw new Error('Unknown tile type: ' + rawTiles[y][x]);
+                            throw new Error('Unknown tile type: ' + rawTiles[y * width + x].type + ' at position: ' + y + ',' + x);
                         }
                     }
 
@@ -135,7 +136,7 @@ class WorldState {
         // }
 
         // Update map with other agents information
-        client.onAgentsSensing((agents) => instance.#onAgentsSensed(agents));
+        client.onAgentsSensing(WorldState.onAgentsSensed.bind(WorldState.getInstance()));
 
     }
 
@@ -181,11 +182,14 @@ class WorldState {
      * Callback for the onAgentsSensing client event, updates the list of sensed agents in the map
      * @param perceivedAgents - List of perceived agents passed by the client
      */
-    #onAgentsSensed(perceivedAgents) {
+    static onAgentsSensed(perceivedAgents) {
         Logger.debug('Populating map with agents information');
 
         const timestamp = Date.now();
         let agents = [];
+
+        Logger.debug("Perceived agents: ", perceivedAgents);
+
         perceivedAgents.forEach(a => {
             // Check whether the agent is an adversary or one of ours
             if ( !(a.id === config.AGENT_ID || a.id === config.AGENT2_ID) ) {

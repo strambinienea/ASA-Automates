@@ -99,7 +99,6 @@ async function findPath(
                 node = cameFrom.get(node);
             }
 
-            // TODO Maybe need to exclude start position
             return path.reverse();
         }
 

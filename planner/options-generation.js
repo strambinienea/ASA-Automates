@@ -44,7 +44,6 @@ async function generateOptions() {
 /**
  * Generate options for the agent to perform actions based on the current world state.
  * This function is used when the state of the agent(s) is normal behavior, and not hand2hand.
- * @return {Promise<void>}
  */
 async function generateOptionNormalBehavior() {
 
@@ -109,14 +108,12 @@ async function generateOptionNormalBehavior() {
 
 /**
  * Generate options for the agent with GATHER Hand2Hand behavior.
- * @return {Promise<void>}
  */
 async function generateOptionGatherBehavior() {
 
     const options = []
     const map = WorldState.getInstance().worldMap;
 
-    Logger.debug("GATHER GATHER GATHER");
     if ( agent.deliveryTile != null ) {
 
         // Check if there are available parcels to pick up, if so add option to pick them up
@@ -154,12 +151,8 @@ async function generateOptionGatherBehavior() {
 
 /**
  * Generate options for the agent with DELIVER Hand2Hand behavior.
- * General behavior for the DELIVER is to wait at the depot until a parcel is available for delivery.
- * @return {Promise<void>}
  */
 async function generateOptionDeliverBehavior() {
-
-    Logger.debug("DELIVERY DELIVERY DELIVERY");
 
     const options = []
     const map = WorldState.getInstance().worldMap;

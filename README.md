@@ -70,6 +70,34 @@ This is a simplified overview of the repository structure:
 - `utils/`: Contains utility functions used throughout the agent. Contains the `logger.js` file, which is used to
   log messages to the console.
 
+## Special Case - Single Corridor Map
+
+In the case of a single corridor map, when `DUAL_AGENT` mode is active, the agents will automatically switch to a
+special mode called `Hand2Hand`. This is done because agents will block each other path, either when delivering or
+collecting a parcel. Each agent will check if they are able to reach a depot or a spawn tile; in case they are not able
+to do that they will enter a special mode, either `GATHER` or `DELIVER`, depending if the agent can reach a spawn
+or depot respectively. Through a message the other agent will be informed about the intention of the agent, and will
+fulfill the missing role.
+
+> **NOTE**: If an agent is not able to fulfill a role received in the message, it will throw an error and crash.
+
+Each role has a different function that generates options.
+
+#### DELIVER
+
+The `DELIVER` agent will stay at the depot, waiting for parcels to be delivered. At the beginning it will define a
+common
+delivery area, a tile which should be reachable by both agents, and will communicate it to the other agent via a
+message.
+It will then wait for the other agent to deliver parcels, and will collect them when they are available.
+
+#### GATHER
+
+The `GATHER` agent will roam the map, looking for parcels to collect. It will collect them and deliver them to the
+delivery area received by the other agent. If it is not able to reach the delivery area, it will move to one of the
+spawn
+points in the map, waiting for a new parcel to be spawned.
+
 ## Environment Variables
 
 The agent can be configured using environment variables. The following variables are available:

@@ -123,8 +123,7 @@ class GoTo extends Plan {
 
             if ( !hasMoved ) {
                 Logger.warn('Move from ', agentX, ', ', agentY, ' to ', x, ', ', y, ' failed, replanning');
-                // TODO Maybe replan move? Currently keep trying
-                // return this.execute(predicate);
+                return false;
             }
         }
         return true;

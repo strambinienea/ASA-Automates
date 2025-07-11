@@ -59,7 +59,6 @@ class Agent {
      */
     #deliveryTile = null;
 
-    // TODO Handle single agent mode
     /**
      * Other agent id, used for cross-agent communications. If null then it's single agent mode
      * @type { string }
@@ -193,16 +192,6 @@ class Agent {
                 } else if ( response ) {
                     // TODO Do something if plan is successfully completed?
                     Logger.info('Intention successfully completed');
-                    // if ( intention.predicate[0] === 'go_to' ) {
-                    //
-                    //     function getRandomInt(min, max) {
-                    //         min = Math.ceil(min);   // Round up to the nearest integer
-                    //         max = Math.floor(max);  // Round down to the nearest integer
-                    //         return Math.floor(Math.random() * (max - min + 1)) + min;
-                    //     }
-                    //
-                    //     await this.push(['go_to', getRandomInt(0, 10), getRandomInt(0, 10)]);
-                    // }
                 }
 
                 // Remove intention from intentionQueue and continue

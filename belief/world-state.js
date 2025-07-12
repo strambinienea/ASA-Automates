@@ -25,28 +25,6 @@ class WorldState {
         this.#worldMap = new WorldMap();
     }
 
-    get worldMap() {
-        return this.#worldMap;
-    }
-
-    get PARCEL_DECADING_INTERVAL() {
-        return this.#PARCEL_DECADING_INTERVAL;
-    }
-
-    get PARCELS_OBSERVATION_DISTANCE() {
-        return this.#PARCELS_OBSERVATION_DISTANCE;
-    }
-
-    // <== GETTERS & SETTERS ==>
-
-    get PARCEL_REWARD_AVG() {
-        return this.#PARCEL_REWARD_AVG;
-    }
-
-    get PARCEL_REWARD_VARIANCE() {
-        return this.#PARCEL_REWARD_VARIANCE;
-    }
-
     /**
      * Observe the world state using the leader client (also uses follower client to gain more information).
      * Update lists with information regarding all entities on the map.
@@ -129,15 +107,31 @@ class WorldState {
         // Update map with parcels information
         client.onParcelsSensing((perceivedParcels) => instance.#onParcelsSensed(perceivedParcels));
 
-        // Use follower to spot other parcels
-        // if ( followerClient ) {
-        //     followerClient
-        //         .onParcelsSensing((perceivedParcels) => instance.#onParcelsSensed(perceivedParcels));
-        // }
-
         // Update map with other agents information
         client.onAgentsSensing(WorldState.onAgentsSensed.bind(WorldState.getInstance()));
+    }
 
+    // <== GETTERS & SETTERS ==>
+
+    get worldMap() {
+        return this.#worldMap;
+    }
+
+    get PARCEL_DECADING_INTERVAL() {
+        return this.#PARCEL_DECADING_INTERVAL;
+    }
+
+    get PARCELS_OBSERVATION_DISTANCE() {
+        return this.#PARCELS_OBSERVATION_DISTANCE;
+    }
+
+
+    get PARCEL_REWARD_AVG() {
+        return this.#PARCEL_REWARD_AVG;
+    }
+
+    get PARCEL_REWARD_VARIANCE() {
+        return this.#PARCEL_REWARD_VARIANCE;
     }
 
     static getInstance() {
@@ -204,14 +198,9 @@ class WorldState {
 
                 agents.push(agent);
             } else {
+                // Ignore agents if not adversaries
+                // Position in the WorldMap is updated by the agent itself, when receiving message from the other agent
                 Logger.debug("Agent: ", a.id, " is one of ours")
-
-                // Update position of the agent in the map
-                if ( a.id === config.AGENT_ID ) {
-                    this.#worldMap.setLeaderPosition(a.x, a.y);
-                } else if ( a.id === config.AGENT2_ID ) {
-                    this.#worldMap.setFollowerPosition(a.x, a.y);
-                }
             }
         })
 

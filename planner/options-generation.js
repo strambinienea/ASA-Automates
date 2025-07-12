@@ -3,6 +3,7 @@ import Logger from "../utils/logger.js";
 import {findPath} from "../utils/utils.js";
 import {agent} from "../coordinator.js";
 import {Hand2HandBehaviour} from "../agent/agent.js";
+import Config from "../config.js";
 
 /**
  * Global variable containing tiles to avoid when searching for a common delivery tile (hand2hand status).
@@ -54,7 +55,7 @@ async function generateOptionNormalBehavior() {
 
     // Check if there are available parcels to pick up, if so add option to pick them up
     map.parcels.forEach(parcel => {
-        if ( canPickUp(parcel) ) {
+        if ( canPickUp(parcel) && !agent.parcelsToIgnore.includes(parcel.id) ) {
             options.push(["go_pick_up", parcel.x, parcel.y, parcel.id]);
             Logger.debug("Option to pick up parcel: ", parcel.id, " at position: ", parcel.x, parcel.y, " pushed.");
         }
@@ -94,15 +95,7 @@ async function generateOptionNormalBehavior() {
         options.push(['go_to', randomTile.x, randomTile.y]);
     }
 
-    options.forEach(option => {
-
-        if ( option[0] === 'go_pick_up' && agent.parcelsToIgnore.includes(option[3]) ) {
-            Logger.debug("Ignoring option to pick up parcel: ", option[3], " as it is in the ignore list.");
-        } else {
-            agent.push(option);
-        }
-    })
-
+    options.forEach(option => agent.push(option))
     await agent.sortIntentionQueue();
 }
 
@@ -157,6 +150,7 @@ async function generateOptionDeliverBehavior() {
     const options = []
     const map = WorldState.getInstance().worldMap;
     const {x: agentX, y: agentY} = await agent.getCurrentPosition();
+    let deliveryTileRetryCounter = 0;
 
     // Move the agent to the depot if not carrying a parcel and not already at the depot.
     if ( !agent.carryingParcel && (agentX !== agent.depot.x || agentY !== agent.depot.y) ) {
@@ -164,7 +158,7 @@ async function generateOptionDeliverBehavior() {
     }
 
     // Initialize the hand2hand mode, find a common delivery tile if not already set
-    if ( agent.deliveryTile === null ) {
+    if ( agent.deliveryTile === null && deliveryTileRetryCounter < Config.MAX_RETRY_COMMON_DELIVERY ) {
 
         TILES_TO_AVOID.push(agent.depot);
 
@@ -190,6 +184,8 @@ async function generateOptionDeliverBehavior() {
 
             // Send message to other agent with the delivery tile
             await agent.sendMessageToCompanion(message);
+        } else {
+            deliveryTileRetryCounter++;
         }
     }
 
@@ -223,7 +219,6 @@ async function generateOptionDeliverBehavior() {
  *
  * @param map { WorldMap }
  * @param agentPosition { {x: number, y: number} }
- * @param companionPosition { {x: number, y: number} }
  * @param tilesToCheck { [Tile] }
  * @return {Promise<Tile>}
  */
@@ -237,7 +232,8 @@ async function findCommonDeliveryTile(
     const deliveryTile = tilesToCheck.shift();
 
     if ( !deliveryTile ) {
-        throw new Error("No common delivery tile found");
+        Logger.warn("No common delivery tile found, will retry later");
+        return null;
     }
 
     // If the tile is not in the avoid list

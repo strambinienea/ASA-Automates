@@ -39,6 +39,13 @@ class Config {
         this.MAX_CARRIED_PARCELS = parseInt(process.env.MAX_CARRIED_PARCELS) || 4;
 
         /**
+         * The maximum number of retries a DELIVER Agent can do while searching for a common delivery
+         * tile before throwing an exception.
+         * @type number
+         * */
+        this.MAX_RETRY_COMMON_DELIVERY = parseInt(process.env.MAX_RETRY_COMMON_DELIVERY) || 10;
+
+        /**
          * Domain file for the pddl
          * @type {string|string}
          */

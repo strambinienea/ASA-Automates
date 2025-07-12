@@ -36,6 +36,12 @@ class Agent {
     #carriedParcel = 0;
 
     /**
+     * Flag that identifies if the agent has been initialized
+     * @type {boolean}
+     */
+    #initialized = false;
+
+    /**
      * Flag that identifies if an agent is the leader or follower agent
      * @type { boolean }
      */
@@ -84,6 +90,17 @@ class Agent {
         this.#client.onYou(({_id, _name, x, y, _score}) => {
             this.#x = x;
             this.#y = y;
+
+            // Update the other agent with the current agent position
+            /** @type{ CompanionPositionMessage } */
+            const message = {
+                action: 'companion_position',
+                position: {
+                    x: this.#x,
+                    y: this.#y
+                }
+            };
+            this.sendMessageToCompanion(message);
         });
 
         Logger.setThreadContext(agentId);
@@ -96,11 +113,12 @@ class Agent {
             this.#carryingParcel = parcels.some(parcel => parcel.carriedBy === this.agentId)
         })
 
-        // Handle reception of parcels to ignore message.
+        // Handle reception of messages that are exchanged between agents, only set on dual agent mode.
         // Use the .bind so that the correct context is passed through the callback
         if ( Config.DUAL_AGENT ) {
             this.#client.onMsg(this.#handleParcelsToIgnoreMessage.bind(this))
             this.#client.onMsg(this.#handleHand2HandMessage.bind(this))
+            this.#client.onMsg(this.#handleCompanionPositionMessage.bind(this))
         }
 
         // Setup option generation
@@ -123,79 +141,30 @@ class Agent {
 
         while ( true ) {
 
-            // Check if the agent is able to reach at least one depot.
-            // Keep doing this if hand2hand mode is disabled, since it takes time to discover the other agent position
-            // and find out if this agent can reach a depot or not
-            if ( this.#hand2HandMode === Hand2HandBehaviour.NONE ) {
-
-                // Set the first reachable depot, only used in hand2hand mode
-                // Set here to avoid repeating the cycle
-                const depot = await this.#checkIfCanDeliver();
-
-                const spawn = await this.#checkIfCanGather();
-
-                if ( depot ) {
-                    Logger.debug("BBBBBBB")
-                    this.#depot = depot;
-                }
-
-                if ( spawn ) {
-                    Logger.debug("CCCCCCC")
-                }
-
-
-                // If cannot deliver and dual agent mode is enabled, then send a message to the other agent.
-                // Entering hand2hand mode, so that the other agent can take care of the delivery.
-                if ( depot === null && Config.DUAL_AGENT ) { // Cannot deliver
-
-                    // Cannot deliver, enter GATHER behavior, the other agent must be DELIVER
-                    Logger.debug("BBBBBBBBBB - GATHER GATHER")
-
-                    await this.#client.emitSay(this.#companionId, {action: 'hand2hand', behavior: 'deliver'});
-                    this.#hand2HandMode = Hand2HandBehaviour.GATHER;
-                    this.#client.onMsg(this.#handleDeliveryTileMessage.bind(this));
-
-                    // Purge parcels to ignore and intention queue, since the agent is now in hand2hand mode
-                    this.#parcelsToIgnore = [];
-                    this.#intentionQueue = [];
-                } else if ( spawn === null && Config.DUAL_AGENT ) {
-
-                    // Cannot gather, enter DELIVER behavior, the other agent must be GATHER
-                    Logger.debug("CCCCCCCCCC - DELIVER DELIVER")
-
-                    await this.#client.emitSay(this.#companionId, {action: 'hand2hand', behavior: 'gather'});
-                    this.#hand2HandMode = Hand2HandBehaviour.DELIVER;
-                    this.#client.onMsg(this.#handleDeliveryTileMessage.bind(this));
-
-                    // Purge parcels to ignore and intention queue, since the agent is now in hand2hand mode
-                    this.#parcelsToIgnore = [];
-                    this.#intentionQueue = [];
-                }
-
-            }
-
             // Consume intention in intentionQueue, else wait for a new one
-            if ( this.#intentionQueue.length > 0 ) {
+            if (
+                this.#intentionQueue.length > 0 &&
+                this.#initialized
+            ) {
                 // Fetch current intention and action
-                const intention = this.#intentionQueue[0];
+                const intention = this.#intentionQueue.shift();
 
                 // Start achieving current intention
                 const response = await intention.achieve().catch(error => {
                     Logger.error('Error while achieving intention: ', intention, 'with error: ', error);
-                    this.#intentionQueue.shift();
-
-                    Logger.debug("INTENTION QUEUE: ", this.#intentionQueue);
                 });
 
                 if ( response instanceof Intention ) {
                     Logger.debug('Intention already started');
                 } else if ( response ) {
                     // TODO Do something if plan is successfully completed?
-                    Logger.info('Intention successfully completed');
+                    Logger.info('Intention ', intention.predicate, ' successfully completed');
+                } else {
+                    Logger.error('Error while achieving intention: ', intention);
+                    // TODO REMOVE
+                    Logger.info('Intention queue: ', this.#intentionQueue.map(i => i.predicate.join(' ')));
                 }
 
-                // Remove intention from intentionQueue and continue
-                this.#intentionQueue.shift();
             } else {
                 await new Promise(res => setImmediate(res));
             }
@@ -281,30 +250,14 @@ class Agent {
     }
 
     /**
-     * Method that returns true if the agent's intention queue contains a 'go_pick_up' intention
-     * @returns {boolean} true if the agent's intention queue contains a 'go_pick_up' intention
-     */
-    hasPickupIntention() {
-        return this.#intentionQueue.some(intention => intention.predicate[0] === 'go_pick_up');
-    }
-
-    /**
-     * Type for the message sent or received regarding parcels to ignore.
-     * @typedef ParcelsToIgnoreMessage
-     * @property {string} action - The action of the message, should be 'multi_pickup'
-     * @property {string[]} parcelIds - The list of parcel ids to ignore
-     */
-
-
-    /**
      * Method used to communicate to the other agent what parcels to ignore,
      * since they are already present in the current agent intentionQueue.
      * @param { [string] } parcels - List with ids of parcels to ignore
      */
     async #sendParcelsToIgnore(parcels) {
 
-        Logger.info(
-            'Agent: ', this.agentId, ' sending message with parcels to ignore to follower agent - ' +
+        Logger.debug(
+            'Agent: ', this.agentId, 'sending message with parcels to ignore to follower agent - ' +
             'Follower ID: ', this.#companionId
         );
 
@@ -317,6 +270,53 @@ class Agent {
         // TODO Maybe only leader can send message, as was legacy code
         await this.#client.emitSay(this.#companionId, message);
     }
+
+    /**
+     * Check if the agent is able to deliver a parcel to at least one depot
+     * @return {Promise<Tile|null>} The depot tile the agent can reach, null if no depot is reachable
+     */
+    async #checkIfCanDeliver() {
+        const map = WorldState.getInstance().worldMap;
+        const depots = await map.getDepotTilesAsync();
+        const agentPosition = {x: this.#x, y: this.#y};
+
+        for ( const depot of depots ) {
+            if ( await findPath(agentPosition, {x: depot.x, y: depot.y}) != null ) {
+                return depot;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Check if the agent is able to reach at least spawn point
+     * @return {Promise<void>}
+     */
+    async #checkIfCanGather() {
+        const map = WorldState.getInstance().worldMap;
+        const spawnTiles = await map.getSpawnTilesAsync();
+        const agentPosition = {x: this.#x, y: this.#y};
+
+        for ( const spawn of spawnTiles ) {
+            if ( await findPath(agentPosition, {x: spawn.x, y: spawn.y}) != null ) {
+                return spawn;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Sends a message to the companion agent.
+     * @param message {object} - The message to send to the companion agent.
+     * @return {Promise<void>}
+     */
+    async sendMessageToCompanion(message) {
+        await this.#client.emitSay(this.#companionId, message);
+    }
+
+    // <== MESSAGES HANDLER FUNCTIONS ==>
 
     /**
      * Handle the message received from the other agent regarding parcels to ignore.
@@ -335,13 +335,6 @@ class Agent {
     }
 
     /**
-     * Type for the message sent or received regarding hand2hand mode.
-     * @typedef Hand2HandMessage
-     * @property {string} action - The action of the message, should be 'hand2hand'
-     * @property {string} behavior - The behavior that the recipient of the message must fulfill, can either be 'gather' or 'deliver'.
-     */
-
-    /**
      * Handle the hand2hand message received from the other agent. Set the hand2HandMode flag to true
      * @param _id
      * @param _name
@@ -349,27 +342,45 @@ class Agent {
      * @return {Promise<void>}
      */
     async #handleHand2HandMessage(_id, _name, message) {
+
         if ( message.action === 'hand2hand' ) {
+
+            if ( this.#initialized ) {
+                Logger.info("Received hand2hand message, but agent is already initialized, ignoring it");
+                return;
+            }
 
             Logger.info('Agent: ', this.agentId, ' received hand2hand message');
             // Check if hand2hand mode is active
-            if ( message.behavior === 'deliver' && await this.#checkIfCanDeliver() != null ) {
+            if ( message.behavior === 'deliver' ) {
+
+                const depot = await this.#checkIfCanDeliver()
+                if ( !depot ) {
+                    throw new Error('Unable to enter hand2hand mode: deliver, no depot reachable');
+                }
+
                 // Check if the agent can deliver parcels, if so set the hand2HandMode to DELIVERY
                 this.#hand2HandMode = Hand2HandBehaviour.DELIVER;
                 this.#client.onMsg(this.#handleDeliveryTileMessage.bind(this))
 
-                // Purge parcels to ignore and intention queue, since the agent is now in hand2hand mode
-                this.#parcelsToIgnore = [];
-                this.#intentionQueue = [];
+                // Set the depot tile for the agent, so it can be used later
+                // This is used by the DELIVER agent to know where the deliver is,
+                // used for consistency instead of fetching it every time
+                this.#depot = depot;
+                this.#initialized = true;
 
             } else if ( message.behavior === 'gather' && await this.#checkIfCanGather() != null ) {
                 // Check if the agent can gather parcels, if so set the hand2HandMode to GATHER
                 this.#hand2HandMode = Hand2HandBehaviour.GATHER;
                 this.#client.onMsg(this.#handleDeliveryTileMessage.bind(this))
 
-                // Purge parcels to ignore and intention queue, since the agent is now in hand2hand mode
-                this.#parcelsToIgnore = [];
-                this.#intentionQueue = [];
+                this.#initialized = true;
+
+            } else if ( message.behavior === 'none' ) {
+
+                Logger.debug("Receiverd hand2hand message with behavior none, no need to change the behavior");
+                this.#initialized = true;
+
             } else {
                 // If not, then it means that both agents are stuck without a reachable depot
                 throw new Error(
@@ -381,16 +392,6 @@ class Agent {
             Logger.debug('Received message with unknown action: ', message.action);
         }
     }
-
-    /**
-     * Type for the message sent or received regarding parcels to ignore.
-     * @typedef DeliveryTileMessage
-     * @property {string} action - The action of the message, should be 'delivery_tile'
-     * @property {status} status - The status of the message, can either be 'set' or 'error'.
-     * The first is used by the GATHER agent to set the delivery, the second is used by the GATHER agent to notify
-     * the DELIVER agent that the tile is not reachable.
-     * @property {Tile} tile - The tile chosen as the delivery tile.
-     */
 
     /**
      * Handle the delivery tile message received from the other agent.
@@ -439,48 +440,62 @@ class Agent {
     }
 
     /**
-     * Check if the agent is able to deliver a parcel to at least one depot
-     * @return {Promise<Tile|null>} The depot tile the agent can reach, null if no depot is reachable
-     */
-    async #checkIfCanDeliver() {
-        const map = WorldState.getInstance().worldMap;
-        const depots = await map.getDepotTilesAsync();
-        const agentPosition = {x: this.#x, y: this.#y};
-
-        for ( const depot of depots ) {
-            if ( await findPath(agentPosition, {x: depot.x, y: depot.y}) != null ) {
-                return depot;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Check if the agent is able to reach at least spawn point
+     * Handle the delivery of the message received from the other agent regarding the companion position.
+     * Also initialize the agent behavior, if the agent is the leader. It checks if the agent can reach a
+     * depot or a spawn tile, and sets the hand2HandMode accordingly.
+     * @param _id
+     * @param _name
+     * @param message { CompanionPositionMessage } - Message received from the other agent
      * @return {Promise<void>}
      */
-    async #checkIfCanGather() {
-        const map = WorldState.getInstance().worldMap;
-        const spawnTiles = await map.getSpawnTilesAsync();
-        const agentPosition = {x: this.#x, y: this.#y};
+    async #handleCompanionPositionMessage(_id, _name, message) {
 
-        for ( const spawn of spawnTiles ) {
-            if ( await findPath(agentPosition, {x: spawn.x, y: spawn.y}) != null ) {
-                return spawn;
+        if ( message.action === 'companion_position' && message.position ) {
+
+            Logger.debug('Received companion position message: ', message.position);
+            const map = WorldState.getInstance().worldMap;
+
+            if ( this.#isLeader ) {
+                map.setFollowerPosition(message.position.x, message.position.y);
+            } else {
+                map.setLeaderPosition(message.position.x, message.position.y);
             }
+
+            if ( Config.DUAL_AGENT && !this.#initialized && this.#isLeader ) {
+
+                Logger.info("Initializing agent behavior")
+
+                // Check if agents need to enter hand2hand mode or can use the default behavior
+                const depot = await this.#checkIfCanDeliver();
+                const spawn = await this.#checkIfCanGather();
+
+                if ( !depot ) {
+
+                    Logger.info("Agent set to GATHER mode, other agent must be DELIVER");
+
+                    // Cannot deliver, enter GATHER behavior, the other agent must be DELIVER
+                    await this.#client.emitSay(this.#companionId, {action: 'hand2hand', behavior: 'deliver'});
+                    this.#hand2HandMode = Hand2HandBehaviour.GATHER;
+                    this.#client.onMsg(this.#handleDeliveryTileMessage.bind(this));
+                } else if ( !spawn ) {
+
+                    Logger.info("Agent set to DELIVER mode, other agent must be GATHER");
+
+                    // Cannot gather, enter DELIVER behavior, the other agent must be GATHER
+                    await this.#client.emitSay(this.#companionId, {action: 'hand2hand', behavior: 'gather'});
+                    this.#hand2HandMode = Hand2HandBehaviour.DELIVER;
+                    this.#client.onMsg(this.#handleDeliveryTileMessage.bind(this));
+                } else {
+
+                    Logger.info("No need for hand2hand mode, agent can use default behavior");
+                    await this.#client.emitSay(this.#companionId, {action: 'hand2hand', behavior: 'none'});
+                }
+
+                this.#initialized = true;
+            }
+        } else {
+            Logger.debug('Received message with unknown action: ', message.action);
         }
-
-        return null;
-    }
-
-    /**
-     * Sends a message to the companion agent.
-     * @param message {object} - The message to send to the companion agent.
-     * @return {Promise<void>}
-     */
-    async sendMessageToCompanion(message) {
-        await this.#client.emitSay(this.#companionId, message);
     }
 
     // <== GETTERS & SETTERS ==>
@@ -552,5 +567,37 @@ class Agent {
         this.#carriedParcel = 0;
     }
 }
+
+// TYPE DEFINITIONS
+/**
+ * Type for the message sent or received regarding parcels to ignore.
+ * @typedef ParcelsToIgnoreMessage
+ * @property {string} action - The action of the message, should be 'multi_pickup'
+ * @property {string[]} parcelIds - The list of parcel ids to ignore
+ */
+
+/**
+ * Type for the message sent or received regarding hand2hand mode.
+ * @typedef Hand2HandMessage
+ * @property {string} action - The action of the message, should be 'hand2hand'
+ * @property {string} behavior - The behavior that the recipient of the message must fulfill, can either be 'gather' or 'deliver'.
+ */
+
+/**
+ * Type for the message sent or received regarding parcels to ignore.
+ * @typedef DeliveryTileMessage
+ * @property {string} action - The action of the message, should be 'delivery_tile'
+ * @property {status} status - The status of the message, can either be 'set' or 'error'.
+ * The first is used by the GATHER agent to set the delivery, the second is used by the GATHER agent to notify
+ * the DELIVER agent that the tile is not reachable.
+ * @property {Tile} tile - The tile chosen as the delivery tile.
+ */
+
+/**
+ * Type for the message sent or received regarding the companion position in the map.
+ * @typedef CompanionPositionMessage
+ * @property {string} action - The action of the message, should be 'companion_position'
+ * @property { x: number, y: number} position - The position of the companion agent in the map.
+ */
 
 export {Agent, Hand2HandBehaviour};

@@ -50,9 +50,6 @@ class Coordinator {
                     config.DUAL_AGENT ? config.AGENT2_ID : null
                 );
                 agent.loop();
-
-                await agent.push(['go_to', 1, 1]);
-
             } else if ( config.DUAL_AGENT ) {           // Spawn Follower - Only in Dual-Agent mode
 
                 agent = new Agent(

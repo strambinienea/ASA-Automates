@@ -1,5 +1,6 @@
 import Tile from "./tile.js";
 import TileType from "./tile-type.js";
+import Logger from "../../utils/logger.js";
 
 /**
  * Class that represents a parcel in the map
@@ -34,10 +35,10 @@ class Parcel extends Tile {
 
         // TODO Once global config class is done, insert reward threshold for expired parcels
         // Find the points decayed since the parcel was first spotted, if it's below zero then the parcel has expired
-        const timeDelta = timestamp - this.timestamp;
-        const pointsDecayed = timeDelta / PARCEL_DECADING_INTERVAL;
+        const timeDelta = (timestamp - this.timestamp) / 1000; // Convert milliseconds to seconds
+        const pointsDecayed = Math.floor(timeDelta / PARCEL_DECADING_INTERVAL);
 
-        return this.reward - pointsDecayed > 0;
+        return this.reward - pointsDecayed < 0;
     }
 
     setParcelId(id) {

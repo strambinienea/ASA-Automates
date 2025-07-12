@@ -38,7 +38,7 @@ class WorldState {
         client.onConfig((config) => {
             Logger.debug('Obtaining information about the environment configurations');
 
-            instance.#PARCEL_DECADING_INTERVAL = config.PARCEL_DECADING_INTERVAL;
+            instance.#PARCEL_DECADING_INTERVAL = parseInt(config.PARCEL_DECADING_INTERVAL.replace(/s$/, ""));
             instance.#PARCELS_OBSERVATION_DISTANCE = config.PARCELS_OBSERVATION_DISTANCE;
             instance.#PARCEL_REWARD_AVG = config.PARCEL_REWARD_AVG;
             instance.#PARCEL_REWARD_VARIANCE = config.PARCEL_REWARD_VARIANCE;

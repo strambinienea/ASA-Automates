@@ -151,7 +151,7 @@ class Agent {
 
                 // Start achieving current intention
                 const response = await intention.achieve().catch(error => {
-                    Logger.error('Error while achieving intention: ', intention, 'with error: ', error);
+                    Logger.error('Error while achieving intention: ', intention.predicate, 'with error: ', error);
                 });
 
                 if ( response instanceof Intention ) {
@@ -160,11 +160,8 @@ class Agent {
                     // TODO Do something if plan is successfully completed?
                     Logger.info('Intention ', intention.predicate, ' successfully completed');
                 } else {
-                    Logger.error('Error while achieving intention: ', intention);
-                    // TODO REMOVE
-                    Logger.info('Intention queue: ', this.#intentionQueue.map(i => i.predicate.join(' ')));
+                    Logger.error('Error while achieving intention: ', intention.predicate);
                 }
-
             } else {
                 await new Promise(res => setImmediate(res));
             }

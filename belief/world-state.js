@@ -57,7 +57,7 @@ class WorldState {
             Logger.debug('Populating map with initial information');
 
             let tiles = [];
-            let deoptTiles = [];
+            let depotTiles = [];
             let spawnTiles = [];
 
             for ( let y = 0; y < height; y++ ) {
@@ -79,13 +79,16 @@ class WorldState {
                         }
                         case 2: {
                             tile.setType(TileType.DEPOT);
-                            deoptTiles.push(new Tile().setX(y).setY(x).setType(TileType.DEPOT));
+                            depotTiles.push(new Tile().setX(y).setY(x).setType(TileType.DEPOT));
                             break;
                         }
-                        case 3: {
+                        case 3:
+                        case 4:
+                        case 5: {
                             tile.setType(TileType.OTHER);
                             break;
                         }
+
                         default: {
                             throw new Error('Unknown tile type: ' + rawTiles[y * width + x].type + ' at position: ' + y + ',' + x);
                         }
@@ -100,7 +103,7 @@ class WorldState {
                 .setHeight(height)
                 .setMap(tiles)
                 .setSpawnTiles(spawnTiles)
-                .setDepotTiles(deoptTiles);
+                .setDepotTiles(depotTiles);
 
         });
 

@@ -39,6 +39,12 @@ class Config {
         this.MAX_CARRIED_PARCELS = parseInt(process.env.MAX_CARRIED_PARCELS) || 4;
 
         /**
+         * The maximum distance the agent can move in a single step when considering a random move.
+         * @type {number|number}
+         */
+        this.MAX_DISTANCE_FOR_RANDOM_MOVE = parseInt(process.env.MAX_DISTANCE_FOR_RANDOM_MOVE) || 5;
+
+        /**
          * The maximum number of retries a DELIVER Agent can do while searching for a common delivery
          * tile before throwing an exception.
          * @type number

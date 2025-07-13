@@ -4,6 +4,7 @@ import {findPath} from "../utils/utils.js";
 import {agent} from "../coordinator.js";
 import {Hand2HandBehaviour} from "../agent/agent.js";
 import Config from "../config.js";
+import {config} from "dotenv";
 
 /**
  * Global variable containing tiles to avoid when searching for a common delivery tile (hand2hand status).
@@ -90,8 +91,41 @@ async function generateOptionNormalBehavior() {
 
         Logger.info("No options available, move closer to one of the spawn point");
 
-        const spawn = await map.getSpawnTilesAsync();
-        const randomTile = spawn[Math.floor(Math.random() * spawn.length)];
+        // Get the spawn tiles from the map, first filter them based on Euclidean distance
+        // This step is necessary to avoid slow performance in big maps,
+        // as we only want to consider tiles that are within a reasonable distance from the agent.
+        const spawn = await map.getSpawnTilesAsync()
+            .then(res => res.filter(
+                    tile => Math.abs(tile.x - agentX) <= Config.MAX_DISTANCE_FOR_RANDOM_MOVE &&
+                        Math.abs(tile.y - agentY) <= Config.MAX_DISTANCE_FOR_RANDOM_MOVE
+                )
+            )
+
+        let closestTiles = [];
+        if ( spawn.length === 0 ) {
+
+            // No target was found with Euclidean distance in range of MAX_DISTANCE_FOR_RANDOM_MOVE,
+            // so we will consider all spawn tiles. No further filtering will be done, since we already proved tiles
+            // are out of reach from the agent.
+            closestTiles = await map.getSpawnTilesAsync();
+
+        } else {
+
+            // Further filter tiles using A* pathfinding to ensure they are both reachable and to consider
+            // the actual distance to the agent.
+            for ( const spawnTile of spawn ) {
+                const path = await findPath({x: agentX, y: agentY}, {x: spawnTile.x, y: spawnTile.y});
+                if ( path != null && path.length <= Config.MAX_DISTANCE_FOR_RANDOM_MOVE ) {
+                    closestTiles.push(spawnTile);
+                }
+            }
+        }
+
+        // Pick a random tile from the closest tiles, or from the spawn tiles if no closest tiles are found
+        const randomTile = closestTiles.length > 0 ?
+            closestTiles[Math.floor(Math.random() * closestTiles.length)] :
+            spawn[Math.floor(Math.random() * spawn.length)];
+
         options.push(['go_to', randomTile.x, randomTile.y]);
     }
 

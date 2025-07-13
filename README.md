@@ -86,28 +86,29 @@ Each role has a different function that generates options.
 #### DELIVER
 
 The `DELIVER` agent will stay at the depot, waiting for parcels to be delivered. At the beginning it will define a
-common
-delivery area, a tile which should be reachable by both agents, and will communicate it to the other agent via a
-message.
-It will then wait for the other agent to deliver parcels, and will collect them when they are available.
+common delivery area, a tile which should be reachable by both agents, and will communicate it to the other agent via a
+message. It will then wait for the other agent to deliver parcels, and will collect them when they are available.
 
 #### GATHER
 
 The `GATHER` agent will roam the map, looking for parcels to collect. It will collect them and deliver them to the
-delivery area received by the other agent. If it is not able to reach the delivery area, it will move to one of the
-spawn
-points in the map, waiting for a new parcel to be spawned.
+delivery area received by the other agent. If no parcel is present to be gather it will move to one of the spawn points
+in the map, waiting for a new parcel to be spawned.
 
 ## Environment Variables
 
 The agent can be configured using environment variables. The following variables are available:
 
-| Variable                   | Required | Default | Description                                                                                                 |
-|----------------------------|----------|---------|-------------------------------------------------------------------------------------------------------------|
-| HOST                       | Yes      | -       | URL of the server where the agent will connect                                                              |
-| DUAL_AGENT                 | No       | false   | When true, spawns two agents (leader and follower)                                                          |
-| TOKEN                      | Yes      | -       | Authentication token for the leader agent                                                                   |
-| TOKEN_2                    | Yes*     | -       | Authentication token for the follower agent (*required if DUAL_AGENT=true)                                  |
-| OPTION_GENERATION_INTERVAL | No       | 200     | Fixed interval (in ms) for generating options                                                               |
-| MAX_CARRIED_PARCELS        | No       | 4       | Maximum number of parcels that can be carried by the agent  before it only considers drop-off instructions. |
-| LOG_LEVEL                  | No       | INFO    | Logging level (ERROR, WARN, INFO, DEBUG)                                                                    |
+| Variable                     | Required | Default                 | Description                                                                                                                                                                 |
+|------------------------------|----------|-------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| HOST                         | Yes      | -                       | URL of the server where the agent will connect                                                                                                                              |
+| DUAL_AGENT                   | No       | false                   | When true, spawns two agents (leader and follower)                                                                                                                          |
+| TOKEN                        | Yes      | -                       | Authentication token for the leader agent                                                                                                                                   |
+| TOKEN_2                      | Yes*     | -                       | Authentication token for the follower agent (*required if DUAL_AGENT=true)                                                                                                  |
+| OPTION_GENERATION_INTERVAL   | No       | 200                     | Fixed interval (in ms) for generating options                                                                                                                               |
+| MAX_CARRIED_PARCELS          | No       | 4                       | Maximum number of parcels that can be carried by the agent  before it only considers drop-off instructions.                                                                 |
+| MAX_DISTANCE_FOR_RANDOM_MOVE | No       | 5                       | Maximum distance from the agent to a tile, when the agent considers a random move. If no spawn tile is inside this range, the agent will consider all spawn tile in the map |
+| MAX_RETRY_COMMON_DELIVERY    | No       | 10                      | **NOT USED!** The maximum number of retries a DELIVER Agent can do while searching for a common delivery tile before throwing an exception.                                 |
+| DOMAIN_FILE_PATH             | No       | "./belief/domain.pddl"  | Path of the domain file used for the PDDL movement                                                                                                                          |
+| PROBLEM_FILE_PATH            | No       | "./belief/problem.pddl" | Path where the problem.pddl will be save, used for debugging.                                                                                                               |
+| LOG_LEVEL                    | No       | INFO                    | Logging level (ERROR, WARN, INFO, DEBUG)                                                                                                                                    |
